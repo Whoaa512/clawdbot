@@ -278,6 +278,23 @@ describe("agentCommand", () => {
     });
   });
 
+  it("persists sessionFile to session store after run", async () => {
+    await withTempHome(async (home) => {
+      const store = path.join(home, "sessions.json");
+      mockConfig(home, store);
+
+      await agentCommand({ message: "hi", to: "+1777" }, runtime);
+
+      const saved = JSON.parse(fs.readFileSync(store, "utf-8")) as Record<
+        string,
+        { sessionId: string; sessionFile?: string }
+      >;
+      const entry = Object.values(saved)[0];
+      expect(entry.sessionFile).toBeTruthy();
+      expect(entry.sessionFile).toContain(entry.sessionId);
+    });
+  });
+
   it("passes through telegram accountId when delivering", async () => {
     await withTempHome(async (home) => {
       const store = path.join(home, "sessions.json");

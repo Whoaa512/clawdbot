@@ -22,6 +22,7 @@ export async function updateSessionStoreAfterAgentRun(params: {
   fallbackProvider?: string;
   fallbackModel?: string;
   result: RunResult;
+  sessionFile?: string;
 }) {
   const {
     cfg,
@@ -34,6 +35,7 @@ export async function updateSessionStoreAfterAgentRun(params: {
     fallbackProvider,
     fallbackModel,
     result,
+    sessionFile,
   } = params;
 
   const usage = result.meta.agentMeta?.usage;
@@ -53,6 +55,7 @@ export async function updateSessionStoreAfterAgentRun(params: {
     modelProvider: providerUsed,
     model: modelUsed,
     contextTokens,
+    sessionFile: sessionFile ?? entry.sessionFile,
   };
   if (isCliProvider(providerUsed, cfg)) {
     const cliSessionId = result.meta.agentMeta?.sessionId?.trim();

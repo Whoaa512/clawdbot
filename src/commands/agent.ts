@@ -491,6 +491,7 @@ export async function agentCommand(
         fallbackProvider,
         fallbackModel,
         result,
+        sessionFile,
       });
     }
 
