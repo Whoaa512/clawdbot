@@ -44,6 +44,7 @@ const DETECTION_PATTERNS: Record<PatternCategory, PatternConfig> = {
 			/ignore\s+(all\s+)?(previous|prior|above|earlier|preceding|the)\s+(instructions?|rules?|guidelines?|prompts?|context)/i,
 			/ignore\s+(the\s+above|above|instructions?)/i,
 			/disregard\s+(all\s+)?(previous|prior|above|earlier|your)?\s*(instructions?|rules?|directives?|guidelines?)/i,
+			/disregard\s+(your\s+)?(prior|previous)\s+(instructions?|rules?|directives?|guidelines?)/i,
 			/forget\s+(everything|all|what)\s+(you\s+)?(know|learned|were told)/i,
 			/new\s+(instructions?|directives?|rules?)\s*:/i,
 			/system\s*:\s*(you\s+are|ignore|forget|disregard|new)/i,
