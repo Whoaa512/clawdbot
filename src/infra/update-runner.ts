@@ -438,43 +438,37 @@ export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<
         }
       }
 
+      const fetchStep = await runStep(
+        step("git fetch", ["git", "-C", gitRoot, "fetch", "--all", "--prune", "--tags"], gitRoot),
+      );
+      steps.push(fetchStep);
+
+      // Verify upstream/main remote ref exists after fetch
       const upstreamStep = await runStep(
         step(
           "upstream check",
-          [
-            "git",
-            "-C",
-            gitRoot,
-            "rev-parse",
-            "--abbrev-ref",
-            "--symbolic-full-name",
-            "@{upstream}",
-          ],
+          ["git", "-C", gitRoot, "rev-parse", "--verify", "upstream/main"],
           gitRoot,
         ),
       );
       steps.push(upstreamStep);
       if (upstreamStep.exitCode !== 0) {
         return {
-          status: "skipped",
+          status: "error",
           mode: "git",
           root: gitRoot,
-          reason: "no-upstream",
+          reason:
+            "no-upstream-remote (run: git remote add upstream https://github.com/openclaw/openclaw.git)",
           before: { sha: beforeSha, version: beforeVersion },
           steps,
           durationMs: Date.now() - startedAt,
         };
       }
 
-      const fetchStep = await runStep(
-        step("git fetch", ["git", "-C", gitRoot, "fetch", "--all", "--prune", "--tags"], gitRoot),
-      );
-      steps.push(fetchStep);
-
       const upstreamShaStep = await runStep(
         step(
-          "git rev-parse @{upstream}",
-          ["git", "-C", gitRoot, "rev-parse", "@{upstream}"],
+          "git rev-parse upstream/main",
+          ["git", "-C", gitRoot, "rev-parse", "upstream/main"],
           gitRoot,
         ),
       );
