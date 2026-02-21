@@ -50,6 +50,7 @@ import {
 } from "./bot-access.js";
 import {
   buildGroupLabel,
+  cacheTopicName,
   buildSenderLabel,
   buildSenderName,
   resolveTelegramDirectPeerId,
@@ -185,6 +186,18 @@ export const buildTelegramMessageContext = async ({
     messageThreadId,
   });
   const resolvedThreadId = threadSpec.scope === "forum" ? threadSpec.id : undefined;
+  if (isForum && resolvedThreadId != null) {
+    type ForumMsg = Record<string, Record<string, Record<string, unknown>> | undefined>;
+    const fm = msg as unknown as ForumMsg;
+    const topicCreated =
+      (fm.reply_to_message as ForumMsg | undefined)?.forum_topic_created?.name ??
+      fm.forum_topic_created?.name;
+    const topicEdited = fm.forum_topic_edited?.name;
+    const topicName = (topicEdited ?? topicCreated) as string | undefined;
+    if (topicName) {
+      cacheTopicName(chatId, resolvedThreadId, topicName);
+    }
+  }
   const replyThreadId = threadSpec.id;
   const dmThreadId = threadSpec.scope === "dm" ? threadSpec.id : undefined;
   const threadIdForConfig = resolvedThreadId ?? dmThreadId;

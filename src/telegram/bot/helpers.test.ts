@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGroupLabel,
   buildTelegramThreadParams,
   buildTypingThreadParams,
+  cacheTopicName,
   describeReplyTarget,
   expandTextLinks,
+  getTopicName,
   normalizeForwardedContext,
   resolveTelegramDirectPeerId,
   resolveTelegramForumThreadId,
@@ -212,6 +215,40 @@ describe("normalizeForwardedContext", () => {
     expect(ctx?.from).toBe("News");
     expect(ctx?.fromSignature).toBeUndefined();
     expect(ctx?.fromChatType).toBe("channel");
+  });
+});
+
+describe("buildGroupLabel", () => {
+  it("returns group label with title and topic", () => {
+    // oxlint-disable-next-line typescript/no-explicit-any
+    const msg = { chat: { title: "Nova HQ" } } as any;
+    expect(buildGroupLabel(msg, -1003645164404, 316)).toBe("Nova HQ id:-1003645164404 topic:316");
+  });
+
+  it("appends cached topic name", () => {
+    cacheTopicName(-1003645164404, 316, "General");
+    // oxlint-disable-next-line typescript/no-explicit-any
+    const msg = { chat: { title: "Nova HQ" } } as any;
+    expect(buildGroupLabel(msg, -1003645164404, 316)).toBe(
+      "Nova HQ id:-1003645164404 topic:316 (General)",
+    );
+  });
+
+  it("returns group label without title", () => {
+    // oxlint-disable-next-line typescript/no-explicit-any
+    const msg = { chat: {} } as any;
+    expect(buildGroupLabel(msg, -100999)).toBe("group:-100999");
+  });
+});
+
+describe("topic name cache", () => {
+  it("returns undefined for uncached topics", () => {
+    expect(getTopicName(123, 999)).toBeUndefined();
+  });
+
+  it("caches and retrieves topic names", () => {
+    cacheTopicName(123, 42, "Test Topic");
+    expect(getTopicName(123, 42)).toBe("Test Topic");
   });
 });
 
