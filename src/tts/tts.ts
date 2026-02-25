@@ -129,6 +129,7 @@ export type ResolvedTtsConfig = {
     proxy?: string;
     timeoutMs?: number;
   };
+  inboundTag?: string;
   prefsPath?: string;
   maxTextLength: number;
   timeoutMs: number;
@@ -310,6 +311,7 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
       proxy: raw.edge?.proxy?.trim() || undefined,
       timeoutMs: raw.edge?.timeoutMs,
     },
+    inboundTag: raw.inboundTag?.trim() || undefined,
     prefsPath: raw.prefsPath,
     maxTextLength: raw.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH,
     timeoutMs: raw.timeoutMs ?? DEFAULT_TIMEOUT_MS,
