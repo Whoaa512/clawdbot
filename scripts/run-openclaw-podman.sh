@@ -38,7 +38,7 @@ LAUNCH_SCRIPT="$OPENCLAW_HOME/run-openclaw-podman.sh"
 # Legacy: setup-host → run setup-podman.sh
 if [[ "${1:-}" == "setup-host" ]]; then
   shift
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null && pwd)"
   SETUP_PODMAN="$REPO_ROOT/setup-podman.sh"
   if [[ -f "$SETUP_PODMAN" ]]; then
     exec "$SETUP_PODMAN" "$@"
