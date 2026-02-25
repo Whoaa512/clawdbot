@@ -545,5 +545,34 @@ describe("tts", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
       });
     });
+
+    it("runs auto-TTS in tagged mode when inboundTtsRequest is true", async () => {
+      await withMockedAutoTtsFetch(async (fetchMock) => {
+        const result = await maybeApplyTtsToPayload({
+          payload: { text: "Hello world" },
+          cfg: taggedCfg,
+          kind: "final",
+          inboundTtsRequest: true,
+        });
+
+        expect(result.mediaUrl).toBeDefined();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("skips auto-TTS in tagged mode without directive or inboundTtsRequest", async () => {
+      await withMockedAutoTtsFetch(async (fetchMock) => {
+        const payload = { text: "Hello world" };
+        const result = await maybeApplyTtsToPayload({
+          payload,
+          cfg: taggedCfg,
+          kind: "final",
+          inboundTtsRequest: false,
+        });
+
+        expect(result).toBe(payload);
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+    });
   });
 });

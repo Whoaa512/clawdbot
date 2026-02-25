@@ -805,6 +805,7 @@ export async function maybeApplyTtsToPayload(params: {
   channel?: string;
   kind?: "tool" | "block" | "final";
   inboundAudio?: boolean;
+  inboundTtsRequest?: boolean;
   ttsAuto?: string;
 }): Promise<ReplyPayload> {
   const config = resolveTtsConfig(params.cfg);
@@ -837,7 +838,7 @@ export async function maybeApplyTtsToPayload(params: {
           text: visibleText.length > 0 ? visibleText : undefined,
         };
 
-  if (autoMode === "tagged" && !directives.hasDirective) {
+  if (autoMode === "tagged" && !directives.hasDirective && !params.inboundTtsRequest) {
     return nextPayload;
   }
   if (autoMode === "inbound" && params.inboundAudio !== true) {
