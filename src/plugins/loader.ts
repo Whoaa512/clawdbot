@@ -523,6 +523,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     if (!enableState.enabled) {
       record.status = "disabled";
       record.error = enableState.reason;
+      if (record.kind === "memory" && memorySlot === pluginId) {
+        memorySlotMatched = true;
+      }
       registry.plugins.push(record);
       seenIds.set(pluginId, candidate.origin);
       continue;
@@ -674,7 +677,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     }
   }
 
-  if (typeof memorySlot === "string" && !memorySlotMatched) {
+  if (typeof memorySlot === "string" && !memorySlotMatched && normalized.enabled) {
     registry.diagnostics.push({
       level: "warn",
       message: `memory slot plugin not found or not marked as memory: ${memorySlot}`,
