@@ -41,6 +41,7 @@ let originalProcessArgv: string[];
 let originalProcessTitle: string;
 let originalNodeNoWarnings: string | undefined;
 let originalHideBanner: string | undefined;
+let originalLaunchdLabel: string | undefined;
 
 beforeAll(async () => {
   ({ registerPreActionHooks } = await import("./preaction.js"));
@@ -54,6 +55,8 @@ beforeEach(() => {
   originalHideBanner = process.env.OPENCLAW_HIDE_BANNER;
   delete process.env.NODE_NO_WARNINGS;
   delete process.env.OPENCLAW_HIDE_BANNER;
+  originalLaunchdLabel = process.env.OPENCLAW_LAUNCHD_LABEL;
+  delete process.env.OPENCLAW_LAUNCHD_LABEL;
 });
 
 afterEach(() => {
@@ -68,6 +71,11 @@ afterEach(() => {
     delete process.env.OPENCLAW_HIDE_BANNER;
   } else {
     process.env.OPENCLAW_HIDE_BANNER = originalHideBanner;
+  }
+  if (originalLaunchdLabel === undefined) {
+    delete process.env.OPENCLAW_LAUNCHD_LABEL;
+  } else {
+    process.env.OPENCLAW_LAUNCHD_LABEL = originalLaunchdLabel;
   }
 });
 
@@ -147,6 +155,18 @@ describe("registerPreActionHooks", () => {
     expect(ensurePluginRegistryLoadedMock).not.toHaveBeenCalled();
     expect(process.title).toBe("openclaw-status");
 
+  it("skips process.title change when running under launchd", async () => {
+    process.env.OPENCLAW_LAUNCHD_LABEL = "ai.openclaw.gateway";
+    const before = process.title;
+    await runPreAction({
+      parseArgv: ["status"],
+      processArgv: ["node", "openclaw", "status"],
+    });
+
+    expect(process.title).toBe(before);
+  });
+
+  it("loads plugin registry for plugin-required commands", async () => {
     vi.clearAllMocks();
     await runPreAction({
       parseArgv: ["message", "send"],

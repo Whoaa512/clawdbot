@@ -13,6 +13,9 @@ import { emitCliBanner } from "../banner.js";
 import { resolveCliName } from "../cli-name.js";
 
 function setProcessTitleForCommand(actionCommand: Command) {
+  if (process.env.OPENCLAW_LAUNCHD_LABEL) {
+    return;
+  }
   let current: Command = actionCommand;
   while (current.parent && current.parent.parent) {
     current = current.parent;
