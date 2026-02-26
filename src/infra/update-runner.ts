@@ -330,12 +330,8 @@ async function copyPrebuiltArtifacts(srcRoot: string, destRoot: string): Promise
       await fs.access(src);
       await fs.mkdir(path.dirname(dest), { recursive: true });
       await fs.copyFile(src, dest);
-      const stat = await fs.stat(dest);
-      process.stderr.write(`[preflight] copied ${rel} (${stat.size} bytes) to ${dest}\n`);
-    } catch (err) {
-      process.stderr.write(
-        `[preflight] failed to copy ${rel}: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
+    } catch {
+      // source doesn't exist, skip
     }
   }
 }
@@ -595,8 +591,14 @@ export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<
 
           await copyPrebuiltArtifacts(gitRoot, worktreeDir);
 
+          const safeEnv = { CDPATH: "" };
           const buildStep = await runStep(
-            step(`preflight build (${shortSha})`, managerScriptArgs(manager, "build"), worktreeDir),
+            step(
+              `preflight build (${shortSha})`,
+              managerScriptArgs(manager, "build"),
+              worktreeDir,
+              safeEnv,
+            ),
           );
           steps.push(buildStep);
           if (buildStep.exitCode !== 0) {
