@@ -173,11 +173,11 @@ export function resolveEnableState(
   if (config.deny.includes(id)) {
     return { enabled: false, reason: "blocked by denylist" };
   }
-  if (config.allow.length > 0 && !config.allow.includes(id)) {
-    return { enabled: false, reason: "not in allowlist" };
-  }
   if (config.slots.memory === id) {
     return { enabled: true };
+  }
+  if (config.allow.length > 0 && !config.allow.includes(id)) {
+    return { enabled: false, reason: "not in allowlist" };
   }
   const entry = config.entries[id];
   if (entry?.enabled === true) {

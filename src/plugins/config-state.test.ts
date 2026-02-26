@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizePluginsConfig, resolveEffectiveEnableState } from "./config-state.js";
+import {
+  normalizePluginsConfig,
+  resolveEffectiveEnableState,
+  resolveEnableState,
+} from "./config-state.js";
 
 describe("normalizePluginsConfig", () => {
   it("uses default memory slot when not specified", () => {
@@ -83,5 +87,26 @@ describe("resolveEffectiveEnableState", () => {
       },
     });
     expect(state).toEqual({ enabled: false, reason: "disabled in config" });
+  });
+});
+
+describe("resolveEnableState", () => {
+  it("enables memory slot plugin even when not in allowlist", () => {
+    const normalized = normalizePluginsConfig({
+      enabled: true,
+      allow: ["telegram", "voice-call"],
+    });
+    expect(normalized.slots.memory).toBe("memory-core");
+    const state = resolveEnableState("memory-core", "bundled", normalized);
+    expect(state).toEqual({ enabled: true });
+  });
+
+  it("still blocks memory slot plugin when explicitly denied", () => {
+    const normalized = normalizePluginsConfig({
+      enabled: true,
+      deny: ["memory-core"],
+    });
+    const state = resolveEnableState("memory-core", "bundled", normalized);
+    expect(state).toEqual({ enabled: false, reason: "blocked by denylist" });
   });
 });
