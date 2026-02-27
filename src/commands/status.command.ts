@@ -550,7 +550,7 @@ export async function statusCommand(
       rows:
         summary.sessions.recent.length > 0
           ? summary.sessions.recent.map((sess) => ({
-              Key: shortenText(sess.key, 32),
+              Key: shortenText(sess.displayName ?? sess.key, 32),
               Kind: sess.kind,
               Age: sess.updatedAt ? formatTimeAgo(sess.age) : "no activity",
               Model: sess.model ?? "unknown",
