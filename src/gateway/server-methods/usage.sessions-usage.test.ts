@@ -117,13 +117,38 @@ const BASE_USAGE_RANGE = {
 
 function expectSuccessfulSessionsUsage(
   respond: ReturnType<typeof vi.fn>,
-): Array<{ key: string; agentId: string }> {
+): {
+  sessions: Array<{
+    key: string;
+    agentId?: string;
+    kind: "main" | "subagent" | "cron" | "cron-run" | "other";
+    parentSessionKey?: string;
+    subagentDepth?: number;
+  }>;
+  aggregates: {
+    byKind: Array<{
+      kind: "main" | "subagent" | "cron" | "cron-run" | "other";
+      totals: { totalTokens: number };
+    }>;
+  };
+} {
   expect(respond).toHaveBeenCalledTimes(1);
   expect(respond.mock.calls[0]?.[0]).toBe(true);
-  const result = respond.mock.calls[0]?.[1] as {
-    sessions: Array<{ key: string; agentId: string }>;
+  return respond.mock.calls[0]?.[1] as {
+    sessions: Array<{
+      key: string;
+      agentId?: string;
+      kind: "main" | "subagent" | "cron" | "cron-run" | "other";
+      parentSessionKey?: string;
+      subagentDepth?: number;
+    }>;
+    aggregates: {
+      byKind: Array<{
+        kind: "main" | "subagent" | "cron" | "cron-run" | "other";
+        totals: { totalTokens: number };
+      }>;
+    };
   };
-  return result.sessions;
 }
 
 describe("sessions.usage", () => {
@@ -139,7 +164,7 @@ describe("sessions.usage", () => {
     expect(vi.mocked(discoverAllSessions).mock.calls[0]?.[0]?.agentId).toBe("main");
     expect(vi.mocked(discoverAllSessions).mock.calls[1]?.[0]?.agentId).toBe("opus");
 
-    const sessions = expectSuccessfulSessionsUsage(respond);
+    const { sessions } = expectSuccessfulSessionsUsage(respond);
     expect(sessions).toHaveLength(2);
 
     // Sorted by most recent first (mtime=200 -> opus first).
@@ -147,6 +172,123 @@ describe("sessions.usage", () => {
     expect(sessions[0].agentId).toBe("opus");
     expect(sessions[1].key).toBe("agent:main:s-main");
     expect(sessions[1].agentId).toBe("main");
+  });
+
+  it("classifies session kind, computes lineage fields, and aggregates by kind", async () => {
+    vi.mocked(discoverAllSessions).mockImplementation(async (params?: { agentId?: string }) => {
+      if (params?.agentId !== "main") {
+        return [];
+      }
+      return [
+        {
+          sessionId: "s-cron-run",
+          sessionFile: "/tmp/agents/main/sessions/s-cron-run.jsonl",
+          mtime: 110,
+          firstUserMessage: "cron run",
+        },
+        {
+          sessionId: "s-cron",
+          sessionFile: "/tmp/agents/main/sessions/s-cron.jsonl",
+          mtime: 100,
+          firstUserMessage: "cron",
+        },
+        {
+          sessionId: "s-sub",
+          sessionFile: "/tmp/agents/main/sessions/s-sub.jsonl",
+          mtime: 90,
+          firstUserMessage: "sub",
+        },
+        {
+          sessionId: "s-other",
+          sessionFile: "/tmp/agents/main/sessions/s-other.jsonl",
+          mtime: 80,
+          firstUserMessage: "other",
+        },
+        {
+          sessionId: "s-main-plain",
+          sessionFile: "/tmp/agents/main/sessions/s-main-plain.jsonl",
+          mtime: 70,
+          firstUserMessage: "main",
+        },
+      ];
+    });
+
+    vi.mocked(loadCombinedSessionStoreForGateway).mockReturnValue({
+      storePath: "(multiple)",
+      store: {
+        "agent:main:cron:job-1:run:run-1": {
+          sessionId: "s-cron-run",
+          sessionFile: "s-cron-run.jsonl",
+          spawnedBy: "agent:main:explicit-parent",
+        },
+        "agent:main:cron:job-2": {
+          sessionId: "s-cron",
+          sessionFile: "s-cron.jsonl",
+        },
+        "subagent:agent:main:root:subagent:worker": {
+          sessionId: "s-sub",
+          sessionFile: "s-sub.jsonl",
+        },
+        "legacy-session-key": {
+          sessionId: "s-other",
+          sessionFile: "s-other.jsonl",
+        },
+      },
+    });
+
+    const respond = await runSessionsUsage(BASE_USAGE_RANGE);
+    const { sessions, aggregates } = expectSuccessfulSessionsUsage(respond);
+
+    expect(sessions.map((session) => session.kind)).toEqual([
+      "cron-run",
+      "cron",
+      "subagent",
+      "other",
+      "main",
+    ]);
+    expect(sessions.find((session) => session.kind === "subagent")?.subagentDepth).toBe(1);
+    expect(sessions.find((session) => session.kind === "cron-run")?.parentSessionKey).toBe(
+      "agent:main:explicit-parent",
+    );
+
+    expect(aggregates.byKind.map((entry) => entry.kind)).toEqual([
+      "cron-run",
+      "cron",
+      "subagent",
+      "other",
+      "main",
+    ]);
+  });
+
+  it("prefers spawnedBy parentSessionKey over key-derived thread parent", async () => {
+    vi.mocked(discoverAllSessions).mockImplementation(async (params?: { agentId?: string }) => {
+      if (params?.agentId !== "main") {
+        return [];
+      }
+      return [
+        {
+          sessionId: "thread-session",
+          sessionFile: "/tmp/agents/main/sessions/thread-session.jsonl",
+          mtime: 100,
+          firstUserMessage: "thread",
+        },
+      ];
+    });
+
+    vi.mocked(loadCombinedSessionStoreForGateway).mockReturnValue({
+      storePath: "(multiple)",
+      store: {
+        "agent:main:thread-parent:thread:child": {
+          sessionId: "thread-session",
+          sessionFile: "thread-session.jsonl",
+          spawnedBy: "agent:main:spawned-parent",
+        },
+      },
+    });
+
+    const respond = await runSessionsUsage(BASE_USAGE_RANGE);
+    const { sessions } = expectSuccessfulSessionsUsage(respond);
+    expect(sessions[0]?.parentSessionKey).toBe("agent:main:spawned-parent");
   });
 
   it("resolves store entries by sessionId when queried via discovered agent-prefixed key", async () => {
@@ -176,7 +318,7 @@ describe("sessions.usage", () => {
 
         // Query via discovered key: agent:<id>:<sessionId>
         const respond = await runSessionsUsage({ ...BASE_USAGE_RANGE, key: "agent:opus:s-opus" });
-        const sessions = expectSuccessfulSessionsUsage(respond);
+        const { sessions } = expectSuccessfulSessionsUsage(respond);
         expect(sessions).toHaveLength(1);
         expect(sessions[0]?.key).toBe(storeKey);
         expect(vi.mocked(loadSessionCostSummary)).toHaveBeenCalled();
