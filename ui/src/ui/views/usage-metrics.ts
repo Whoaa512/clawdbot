@@ -432,9 +432,10 @@ const buildAggregatesFromSessions = (
       channelMap.set(session.channel, totals);
     }
 
-    const kindTotals = kindMap.get(session.kind) ?? emptyUsageTotals();
+    const sessionKind = session.kind ?? "other";
+    const kindTotals = kindMap.get(sessionKind) ?? emptyUsageTotals();
     mergeUsageTotals(kindTotals, usage);
-    kindMap.set(session.kind, kindTotals);
+    kindMap.set(sessionKind, kindTotals);
 
     for (const day of usage.dailyBreakdown ?? []) {
       const daily = dailyMap.get(day.date) ?? {

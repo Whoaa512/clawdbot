@@ -52,7 +52,7 @@ function getCostBreakdown(totals: UsageTotals) {
 }
 
 const getSessionKindBadgeLabel = (session: UsageSessionEntry): string | undefined => {
-  if (session.kind === "main") {
+  if (!session.kind || session.kind === "main") {
     return undefined;
   }
   if (session.kind === "subagent") {
