@@ -154,6 +154,7 @@ describe("registerPreActionHooks", () => {
     });
     expect(ensurePluginRegistryLoadedMock).not.toHaveBeenCalled();
     expect(process.title).toBe("openclaw-status");
+  });
 
   it("skips process.title change when running under launchd", async () => {
     process.env.OPENCLAW_LAUNCHD_LABEL = "ai.openclaw.gateway";
