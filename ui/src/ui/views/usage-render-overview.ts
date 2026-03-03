@@ -51,6 +51,30 @@ function getCostBreakdown(totals: UsageTotals) {
   };
 }
 
+const getSessionKindBadgeLabel = (session: UsageSessionEntry): string | undefined => {
+  if (session.kind === "main") {
+    return undefined;
+  }
+  if (session.kind === "subagent") {
+    const depth = session.subagentDepth && session.subagentDepth > 0 ? session.subagentDepth : 1;
+    return `[sub:d${depth}]`;
+  }
+  if (session.kind === "cron") {
+    return "[cron]";
+  }
+  if (session.kind === "cron-run") {
+    return "[cron-run]";
+  }
+  return "[other]";
+};
+
+const buildByKindInsightRows = (aggregates: UsageAggregates) =>
+  (aggregates.byKind ?? []).slice(0, 5).map((entry) => ({
+    label: entry.kind,
+    value: formatCost(entry.totals.totalCost),
+    sub: formatTokens(entry.totals.totalTokens),
+  }));
+
 function renderFilterChips(
   selectedDays: string[],
   selectedHours: number[],
@@ -445,6 +469,12 @@ function renderUsageInsights(
     value: formatCost(entry.totals.totalCost),
     sub: formatTokens(entry.totals.totalTokens),
   }));
+  const byKindRows = buildByKindInsightRows(aggregates);
+  const topKind = (aggregates.byKind ?? [])[0];
+  const topKindShare =
+    totals.totalTokens > 0 && topKind
+      ? `${((topKind.totals.totalTokens / totals.totalTokens) * 100).toFixed(1)}% tokens`
+      : "No kind data";
 
   return html`
     <section class="card" style="margin-top: 16px;">
@@ -502,6 +532,14 @@ function renderUsageInsights(
         </div>
         <div class="usage-summary-card">
           <div class="usage-summary-title">
+            Lineage Kinds
+            <span class="usage-summary-hint" title="Token and cost split by session lineage kind.">?</span>
+          </div>
+          <div class="usage-summary-value">${(aggregates.byKind ?? []).length}</div>
+          <div class="usage-summary-sub">${topKind ? `${topKind.kind} · ${topKindShare}` : "No kind data"}</div>
+        </div>
+        <div class="usage-summary-card">
+          <div class="usage-summary-title">
             Throughput
             <span class="usage-summary-hint" title=${throughputHint}>?</span>
           </div>
@@ -535,6 +573,7 @@ function renderUsageInsights(
         ${renderInsightList("Top Tools", topTools, "No tool calls")}
         ${renderInsightList("Top Agents", topAgents, "No agent data")}
         ${renderInsightList("Top Channels", topChannels, "No channel data")}
+        ${renderInsightList("By Kind", byKindRows, "No kind data")}
         ${renderPeakErrorList("Peak Error Days", errorDays, "No error data")}
         ${renderPeakErrorList("Peak Error Hours", errorHours, "No error data")}
       </div>
@@ -653,6 +692,7 @@ function renderSessionsCard(
     const value = getSessionValue(s);
     const displayLabel = formatSessionListLabel(s);
     const meta = buildSessionMeta(s);
+    const kindBadge = getSessionKindBadgeLabel(s);
     return html`
       <div
         class="session-bar-row ${isSelected ? "selected" : ""}"
@@ -660,7 +700,10 @@ function renderSessionsCard(
         title="${s.key}"
       >
         <div class="session-bar-label">
-          <div class="session-bar-title">${displayLabel}</div>
+          <div class="session-bar-title">
+            ${displayLabel}
+            ${kindBadge ? html`<span class="usage-badge">${kindBadge}</span>` : nothing}
+          </div>
           ${meta.length > 0 ? html`<div class="session-bar-meta">${meta.join(" · ")}</div>` : nothing}
         </div>
         <div class="session-bar-track" style="display: none;"></div>
@@ -793,4 +836,6 @@ export {
   renderPeakErrorList,
   renderSessionsCard,
   renderUsageInsights,
+  getSessionKindBadgeLabel,
+  buildByKindInsightRows,
 };
