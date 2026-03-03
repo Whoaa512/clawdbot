@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import { loadConfig } from "../../config/config.js";
 import {
+  readCronRunLogEntriesPageAll,
+  type CronRunLogEntry,
+} from "../../cron/run-log.js";
+import { resolveCronStorePath } from "../../cron/store.js";
+import {
   resolveSessionFilePath,
   resolveSessionFilePathOptions,
 } from "../../config/sessions/paths.js";
@@ -355,6 +360,68 @@ export const __test = {
 
 export type { SessionUsageEntry, SessionUsageKind, SessionsUsageAggregates, SessionsUsageResult };
 
+const parseCronRunKey = (
+  key: string,
+): {
+  jobId?: string;
+  runId?: string;
+} => {
+  const rest = parseAgentSessionKey(key)?.rest ?? key;
+  const runMatch = /^cron:([^:]+):run:([^:]+)$/.exec(rest);
+  if (runMatch) {
+    return { jobId: runMatch[1], runId: runMatch[2] };
+  }
+  const cronMatch = /^cron:([^:]+)$/.exec(rest);
+  if (cronMatch) {
+    return { jobId: cronMatch[1] };
+  }
+  return {};
+};
+
+const pickNewestRunLog = (
+  current: CronRunLogEntry | undefined,
+  candidate: CronRunLogEntry,
+): CronRunLogEntry => {
+  if (!current) {
+    return candidate;
+  }
+  return candidate.ts >= current.ts ? candidate : current;
+};
+
+const buildCronRunLogMap = async (
+  config: ReturnType<typeof loadConfig>,
+): Promise<Map<string, CronRunLogEntry>> => {
+  const map = new Map<string, CronRunLogEntry>();
+  const storePath = resolveCronStorePath(config.cron?.store);
+  let offset = 0;
+
+  while (true) {
+    const page = await readCronRunLogEntriesPageAll({
+      storePath,
+      limit: 200,
+      offset,
+      sortDir: "desc",
+    }).catch(() => null);
+    if (!page) {
+      return map;
+    }
+
+    for (const entry of page.entries) {
+      if (entry.sessionKey) {
+        map.set(entry.sessionKey, pickNewestRunLog(map.get(entry.sessionKey), entry));
+      }
+      if (entry.sessionId) {
+        map.set(entry.sessionId, pickNewestRunLog(map.get(entry.sessionId), entry));
+      }
+    }
+
+    if (!page.hasMore || page.nextOffset === null) {
+      return map;
+    }
+    offset = page.nextOffset;
+  }
+};
+
 export const usageHandlers: GatewayRequestHandlers = {
   "usage.status": async ({ respond }) => {
     const summary = await loadProviderUsageSummary();
@@ -590,6 +657,8 @@ export const usageHandlers: GatewayRequestHandlers = {
       target.missingCostEntries += source.missingCostEntries;
     };
 
+    const cronRunLogMap = await buildCronRunLogMap(config);
+
     for (const merged of limitedEntries) {
       const agentId = parseAgentSessionKey(merged.key)?.agentId;
       const kind: SessionUsageKind = isCronRunSessionKey(merged.key)
@@ -604,6 +673,17 @@ export const usageHandlers: GatewayRequestHandlers = {
       const subagentDepth = kind === "subagent" ? getSubagentDepth(merged.key) : undefined;
       const parentSessionKey =
         merged.storeEntry?.spawnedBy ?? resolveThreadParentSessionKey(merged.key) ?? undefined;
+      const parsedCron = parseCronRunKey(merged.key);
+      const cronLog = cronRunLogMap.get(merged.key) ?? cronRunLogMap.get(merged.sessionId);
+      const cron =
+        kind === "cron" || kind === "cron-run"
+          ? {
+              jobId: parsedCron.jobId ?? cronLog?.jobId,
+              runId: parsedCron.runId,
+              matchedRunLog: Boolean(cronLog),
+              runTs: cronLog?.ts,
+            }
+          : undefined;
       const usage = await loadSessionCostSummary({
         sessionId: merged.sessionId,
         sessionEntry: merged.storeEntry,
@@ -758,6 +838,7 @@ export const usageHandlers: GatewayRequestHandlers = {
         kind,
         subagentDepth,
         parentSessionKey,
+        cron,
         agentId,
         channel,
         chatType,

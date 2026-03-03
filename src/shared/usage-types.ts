@@ -20,6 +20,12 @@ export type SessionUsageEntry = {
   kind: SessionUsageKind;
   subagentDepth?: number;
   parentSessionKey?: string;
+  cron?: {
+    jobId?: string;
+    runId?: string;
+    matchedRunLog?: boolean;
+    runTs?: number;
+  };
   agentId?: string;
   channel?: string;
   chatType?: string;
