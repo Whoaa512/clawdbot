@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildByKindInsightRows,
-  getSessionKindBadgeLabel,
-} from "./usage-render-overview.ts";
+import { buildByKindInsightRows, getSessionKindBadgeLabel } from "./usage-render-overview.ts";
 import type { UsageAggregates, UsageSessionEntry } from "./usageTypes.ts";
 
 describe("getSessionKindBadgeLabel", () => {
