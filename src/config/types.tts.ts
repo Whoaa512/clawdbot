@@ -36,6 +36,12 @@ export type TtsConfig = {
   provider?: TtsProvider;
   /** Optional model override for TTS auto-summary (provider/model or alias). */
   summaryModel?: string;
+  /** Local pre-hook TTS binary. Runs before built-in provider dispatch. */
+  exec?: {
+    command?: string;
+    args?: string[];
+    timeoutMs?: number;
+  };
   /** Allow the model to override TTS parameters. */
   modelOverrides?: TtsModelOverrideConfig;
   /** ElevenLabs configuration. */

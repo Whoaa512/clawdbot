@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   rmSync,
   renameSync,
+  statSync,
   unlinkSync,
 } from "node:fs";
 import path from "node:path";
@@ -26,6 +27,7 @@ import { logVerbose } from "../globals.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { stripMarkdown } from "../line/markdown-to-line.js";
 import { isVoiceCompatibleAudio } from "../media/audio.js";
+import { runCommandWithTimeout } from "../process/exec.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
 import {
   edgeTTS,
@@ -94,6 +96,11 @@ export type ResolvedTtsConfig = {
   provider: TtsProvider;
   providerSource: "config" | "default";
   summaryModel?: string;
+  exec?: {
+    command: string;
+    args: string[];
+    timeoutMs: number;
+  };
   modelOverrides: ResolvedTtsModelOverrides;
   elevenlabs: {
     apiKey?: string;
@@ -258,6 +265,7 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
   const raw: TtsConfig = cfg.messages?.tts ?? {};
   const providerSource = raw.provider ? "config" : "default";
   const edgeOutputFormat = raw.edge?.outputFormat?.trim();
+  const execCommand = raw.exec?.command?.trim();
   const auto = normalizeTtsAutoMode(raw.auto) ?? (raw.enabled ? "always" : "off");
   return {
     auto,
@@ -265,6 +273,13 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
     provider: raw.provider ?? "edge",
     providerSource,
     summaryModel: raw.summaryModel?.trim() || undefined,
+    exec: execCommand
+      ? {
+          command: resolveUserPath(execCommand),
+          args: raw.exec?.args ?? [],
+          timeoutMs: raw.exec?.timeoutMs ?? raw.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        }
+      : undefined,
     modelOverrides: resolveModelOverridePolicy(raw.modelOverrides),
     elevenlabs: {
       apiKey: normalizeResolvedSecretInputString({
@@ -548,6 +563,70 @@ function buildTtsFailureResult(errors: string[]): { success: false; error: strin
   };
 }
 
+async function tryExecTts(params: {
+  text: string;
+  config: ResolvedTtsConfig;
+  outputExtension: string;
+}): Promise<TtsResult | undefined> {
+  const startedAt = Date.now();
+  if (!params.config.exec) {
+    return undefined;
+  }
+
+  const tempRoot = resolvePreferredOpenClawTmpDir();
+  mkdirSync(tempRoot, { recursive: true, mode: 0o700 });
+  const tempDir = mkdtempSync(path.join(tempRoot, "tts-"));
+  const outputPath = path.join(tempDir, `voice-${Date.now()}${params.outputExtension}`);
+  const argv = [
+    params.config.exec.command,
+    ...params.config.exec.args.map((arg) => arg.replaceAll("{output}", outputPath)),
+  ];
+
+  try {
+    const result = await runCommandWithTimeout(argv, {
+      timeoutMs: params.config.exec.timeoutMs,
+      input: params.text,
+    });
+
+    if (result.code !== 0) {
+      logVerbose(
+        `TTS: exec failed with ${result.termination}${result.code != null ? ` code ${result.code}` : ""}${result.stderr.trim() ? ` (${result.stderr.trim()})` : ""}; falling back.`,
+      );
+      rmSync(tempDir, { recursive: true, force: true });
+      return undefined;
+    }
+
+    if (!existsSync(outputPath)) {
+      logVerbose(`TTS: exec produced no output file; falling back.`);
+      rmSync(tempDir, { recursive: true, force: true });
+      return undefined;
+    }
+
+    const outputStat = statSync(outputPath);
+    if (outputStat.size <= 0) {
+      logVerbose(`TTS: exec produced empty output file; falling back.`);
+      rmSync(tempDir, { recursive: true, force: true });
+      return undefined;
+    }
+
+    scheduleCleanup(tempDir);
+    const ext = path.extname(outputPath);
+    return {
+      success: true,
+      audioPath: outputPath,
+      provider: "exec",
+      latencyMs: Date.now() - startedAt,
+      outputFormat: ext ? ext.slice(1) : undefined,
+      voiceCompatible: isVoiceCompatibleAudio({ fileName: outputPath }),
+    };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    logVerbose(`TTS: exec spawn failed (${error.message}); falling back.`);
+    rmSync(tempDir, { recursive: true, force: true });
+    return undefined;
+  }
+}
+
 export async function textToSpeech(params: {
   text: string;
   cfg: OpenClawConfig;
@@ -565,6 +644,15 @@ export async function textToSpeech(params: {
       success: false,
       error: `Text too long (${params.text.length} chars, max ${config.maxTextLength})`,
     };
+  }
+
+  const execResult = await tryExecTts({
+    text: params.text,
+    config,
+    outputExtension: output.extension,
+  });
+  if (execResult) {
+    return execResult;
   }
 
   const userProvider = getTtsProvider(config, prefsPath);
