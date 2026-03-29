@@ -39,6 +39,7 @@ git log --oneline HEAD..upstream/main --no-merges | rg -i 'secur|allow|auth|pair
 ```
 
 For each hit, read the diff and classify:
+
 - 🔴 **High**: sandbox escapes, auth bypasses, privilege escalation, injection fixes
 - 🟡 **Medium**: auth flow refactors, hardening without known exploit
 - 🟢 **Low**: docs-only, test-only, defense-in-depth
@@ -55,6 +56,7 @@ git diff HEAD...upstream/main -- Dockerfile docker-setup.sh .github/workflows/
 ```
 
 Flag:
+
 - New dependencies (especially post-install scripts)
 - Removed or replaced dependencies
 - Lock file churn disproportionate to package.json changes
