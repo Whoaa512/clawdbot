@@ -79,6 +79,29 @@ Full schema is in [Gateway configuration](/gateway/configuration).
 }
 ```
 
+### Exec pre-hook with OpenAI fallback
+
+```json5
+{
+  messages: {
+    tts: {
+      auto: "always",
+      exec: {
+        command: "/absolute/path/to/binary",
+        args: ["--output", "{output}"],
+        timeoutMs: 15000,
+      },
+      provider: "openai",
+    },
+  },
+}
+```
+
+The exec hook receives reply text on stdin. `{output}` is replaced with a temp audio
+file path. Exit code `0` plus a non-empty output file counts as success. Any spawn
+failure, timeout, nonzero exit, or missing/empty output falls back to the configured
+built-in provider flow.
+
 ### OpenAI primary with ElevenLabs fallback
 
 ```json5
@@ -216,6 +239,9 @@ Then run:
 - Legacy `provider: "edge"` still works and is normalized to `microsoft`.
 - `summaryModel`: optional cheap model for auto-summary; defaults to `agents.defaults.model.primary`.
   - Accepts `provider/model` or a configured model alias.
+- `exec.command`: absolute local binary path for pre-hook synthesis.
+- `exec.args`: argv list for the binary. `{output}` is replaced with the temp output file path.
+- `exec.timeoutMs`: optional exec timeout override (ms).
 - `modelOverrides`: allow the model to emit TTS directives (on by default).
   - `allowProvider` defaults to `false` (provider switching is opt-in).
 - `providers.<id>`: provider-owned settings keyed by speech provider id.
