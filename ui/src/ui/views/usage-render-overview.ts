@@ -52,6 +52,31 @@ function getCostBreakdown(totals: UsageTotals) {
   };
 }
 
+const getSessionKindBadgeLabel = (session: UsageSessionEntry): string | undefined => {
+  if (!session.kind || session.kind === "main") {
+    return undefined;
+  }
+  if (session.kind === "subagent") {
+    const depth = session.subagentDepth && session.subagentDepth > 0 ? session.subagentDepth : 1;
+    return `[sub:d${depth}]`;
+  }
+  if (session.kind === "cron") {
+    return "[cron]";
+  }
+  if (session.kind === "cron-run") {
+    return "[cron-run]";
+  }
+  return "[other]";
+};
+
+const buildByKindInsightRows = (aggregates: UsageAggregates) =>
+  (aggregates.byKind ?? []).slice(0, 5).map((entry) => ({
+    label: entry.kind,
+    value: formatCost(entry.totals?.totalCost ?? 0),
+    sub: formatTokens(entry.totals?.totalTokens ?? 0),
+  }));
+
+
 function renderFilterChips(
   selectedDays: string[],
   selectedHours: number[],
