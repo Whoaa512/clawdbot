@@ -15,6 +15,9 @@ import {
 import { isCommandJsonOutputMode } from "./json-mode.js";
 
 function setProcessTitleForCommand(actionCommand: Command) {
+  if (process.env.OPENCLAW_LAUNCHD_LABEL) {
+    return;
+  }
   let current: Command = actionCommand;
   while (current.parent && current.parent.parent) {
     current = current.parent;
