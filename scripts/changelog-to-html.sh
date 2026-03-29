@@ -9,7 +9,7 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)
 if [[ -z "$CHANGELOG_FILE" ]]; then
   if [[ -f "$SCRIPT_DIR/../CHANGELOG.md" ]]; then
     CHANGELOG_FILE="$SCRIPT_DIR/../CHANGELOG.md"

@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 CLAUDE_CREDS="$HOME/.claude/.credentials.json"
 STATE_FILE="$HOME/.openclaw/auth-monitor-state"
 

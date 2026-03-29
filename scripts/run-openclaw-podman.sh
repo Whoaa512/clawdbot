@@ -203,7 +203,7 @@ fi
 # Legacy: setup-host -> run the Podman setup script
 if [[ "${1:-}" == "setup-host" ]]; then
   shift
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null && pwd)"
   SETUP_PODMAN="$REPO_ROOT/scripts/podman/setup.sh"
   if [[ -f "$SETUP_PODMAN" ]]; then
     exec "$SETUP_PODMAN" "$@"
