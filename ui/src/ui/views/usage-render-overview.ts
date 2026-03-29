@@ -560,6 +560,16 @@ function renderUsageInsights(
     value: formatCost(entry.totals.totalCost),
     sub: formatTokens(entry.totals.totalTokens),
   }));
+  const byKindRows = (aggregates.byKind ?? []).slice(0, 5).map((entry) => ({
+    label: entry.kind,
+    value: formatCost(entry.totals?.totalCost ?? 0),
+    sub: formatTokens(entry.totals?.totalTokens ?? 0),
+  }));
+  const topKind = (aggregates.byKind ?? [])[0];
+  const topKindShare =
+    topKind && totals.totalCost > 0
+      ? `${((100 * (topKind.totals?.totalCost ?? 0)) / totals.totalCost).toFixed(0)}%`
+      : "";
 
   return html`
     <section class="card usage-overview-card">
@@ -628,6 +638,13 @@ function renderUsageInsights(
             className: "usage-summary-card--compact",
           })}
           ${renderSummaryStat({
+            title: "Lineage Kinds",
+            hint: "Token and cost split by session lineage kind.",
+            value: (aggregates.byKind ?? []).length,
+            sub: topKind ? `${topKind.kind} · ${topKindShare}` : "No kind data",
+            className: "usage-summary-card--compact",
+          })}
+          ${renderSummaryStat({
             title: t("usage.overview.errors"),
             hint: t("usage.overview.errorsHint"),
             value: aggregates.messages.errors,
@@ -661,6 +678,7 @@ function renderUsageInsights(
             topChannels,
             t("usage.overview.noChannelData"),
           )}
+          ${renderInsightList("By Kind", byKindRows, "No kind data")}
           ${renderPeakErrorList(
             t("usage.overview.peakErrorDays"),
             errorDays,
