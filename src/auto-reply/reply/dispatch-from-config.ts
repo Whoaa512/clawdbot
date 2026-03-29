@@ -113,6 +113,40 @@ const isInboundAudioContext = (ctx: FinalizedMsgContext): boolean => {
   return AUDIO_HEADER_RE.test(trimmed);
 };
 
+const DEFAULT_TTS_INBOUND_TAG = "🔊";
+
+const stripTtsTagFromCtx = (ctx: FinalizedMsgContext, cfg: OpenClawConfig): FinalizedMsgContext => {
+  const ttsTag = resolveTtsConfig(cfg).inboundTag ?? DEFAULT_TTS_INBOUND_TAG;
+  const strip = (s: string | undefined) =>
+    typeof s === "string" ? s.replaceAll(ttsTag, "").trim() : s;
+  return {
+    ...ctx,
+    Body: strip(ctx.Body),
+    RawBody: strip(ctx.RawBody),
+    BodyForCommands: strip(ctx.BodyForCommands),
+    CommandBody: strip(ctx.CommandBody),
+  } as FinalizedMsgContext;
+};
+
+const hasInboundTtsTag = (ctx: FinalizedMsgContext, cfg: OpenClawConfig): boolean => {
+  const ttsConfig = resolveTtsConfig(cfg);
+  const tag = ttsConfig.inboundTag ?? DEFAULT_TTS_INBOUND_TAG;
+  if (!tag) {
+    return false;
+  }
+  const body =
+    typeof ctx.BodyForCommands === "string"
+      ? ctx.BodyForCommands
+      : typeof ctx.CommandBody === "string"
+        ? ctx.CommandBody
+        : typeof ctx.RawBody === "string"
+          ? ctx.RawBody
+          : typeof ctx.Body === "string"
+            ? ctx.Body
+            : "";
+  return body.includes(tag);
+};
+
 const resolveSessionStoreLookup = (
   ctx: FinalizedMsgContext,
   cfg: OpenClawConfig,
@@ -223,6 +257,8 @@ export async function dispatchReplyFromConfig(params: {
   const routeThreadId =
     ctx.MessageThreadId ?? parseSessionThreadInfo(acpDispatchSessionKey).threadId;
   const inboundAudio = isInboundAudioContext(ctx);
+  const inboundTtsRequest = hasInboundTtsTag(ctx, cfg);
+  const replyCtx = inboundTtsRequest ? stripTtsTagFromCtx(ctx, cfg) : ctx;
   const sessionTtsAuto = normalizeTtsAutoMode(sessionStoreEntry.entry?.ttsAuto);
   const hookRunner = getGlobalHookRunner();
 
@@ -520,6 +556,7 @@ export async function dispatchReplyFromConfig(params: {
         channel: ttsChannel,
         kind: "final",
         inboundAudio,
+        inboundTtsRequest,
         ttsAuto: sessionTtsAuto,
       });
       if (shouldRouteToOriginating && originatingChannel && originatingTo) {
@@ -660,7 +697,7 @@ export async function dispatchReplyFromConfig(params: {
     const replyResolver =
       params.replyResolver ?? (await loadGetReplyFromConfigRuntime()).getReplyFromConfig;
     const replyResult = await replyResolver(
-      ctx,
+      replyCtx,
       {
         ...params.replyOptions,
         typingPolicy: typing.typingPolicy,
@@ -673,6 +710,7 @@ export async function dispatchReplyFromConfig(params: {
               channel: ttsChannel,
               kind: "tool",
               inboundAudio,
+              inboundTtsRequest,
               ttsAuto: sessionTtsAuto,
             });
             const deliveryPayload = resolveToolDeliveryPayload(ttsPayload);
@@ -711,6 +749,7 @@ export async function dispatchReplyFromConfig(params: {
               channel: ttsChannel,
               kind: "block",
               inboundAudio,
+              inboundTtsRequest,
               ttsAuto: sessionTtsAuto,
             });
             if (shouldRouteToOriginating) {
@@ -784,6 +823,7 @@ export async function dispatchReplyFromConfig(params: {
           channel: ttsChannel,
           kind: "final",
           inboundAudio,
+          inboundTtsRequest,
           ttsAuto: sessionTtsAuto,
         });
         // Only send if TTS was actually applied (mediaUrl exists)

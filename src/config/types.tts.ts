@@ -106,4 +106,6 @@ export type TtsConfig = LegacyTtsConfigCompat & {
   maxTextLength?: number;
   /** API request timeout (ms). */
   timeoutMs?: number;
+  /** Tag in user's inbound message that requests TTS on the reply (default: "🔊"). Set to "" to disable. */
+  inboundTag?: string;
 };
