@@ -227,6 +227,7 @@ describe("registerPreActionHooks", () => {
     });
     expect(ensurePluginRegistryLoadedMock).toHaveBeenCalledWith({ scope: "channels" });
     expect(processTitleSetSpy).toHaveBeenCalledWith("openclaw-status");
+  });
 
   it("skips process.title change when running under launchd", async () => {
     process.env.OPENCLAW_LAUNCHD_LABEL = "ai.openclaw.gateway";
@@ -253,7 +254,6 @@ describe("registerPreActionHooks", () => {
       commandPath: ["message", "send"],
     });
     expect(ensurePluginRegistryLoadedMock).toHaveBeenCalledWith({ scope: "all" });
-    processTitleSetSpy.mockRestore();
   });
 
   it("keeps setup alias and channels add manifest-first", async () => {

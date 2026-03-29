@@ -650,12 +650,20 @@ async function tryExecTts(params: {
 
   try {
     const result = await new Promise<{ code: number | null; stderr: string }>((resolve) => {
-      const proc = execFile(argv[0], argv.slice(1), {
-        timeout: params.config.exec!.timeoutMs,
-        maxBuffer: 10 * 1024 * 1024,
-      }, (error, _stdout, stderr) => {
-        resolve({ code: error ? (error as NodeJS.ErrnoException & { code?: number }).code ?? 1 : 0, stderr: stderr ?? "" });
-      });
+      const proc = execFile(
+        argv[0],
+        argv.slice(1),
+        {
+          timeout: params.config.exec!.timeoutMs,
+          maxBuffer: 10 * 1024 * 1024,
+        },
+        (error, _stdout, stderr) => {
+          resolve({
+            code: error ? ((error as NodeJS.ErrnoException & { code?: number }).code ?? 1) : 0,
+            stderr: stderr ?? "",
+          });
+        },
+      );
       if (proc.stdin) {
         proc.stdin.write(params.text);
         proc.stdin.end();
@@ -663,7 +671,9 @@ async function tryExecTts(params: {
     });
 
     if (result.code !== 0) {
-      logVerbose(`TTS: exec failed (code ${result.code})${result.stderr.trim() ? ` (${result.stderr.trim()})` : ""}; falling back.`);
+      logVerbose(
+        `TTS: exec failed (code ${result.code})${result.stderr.trim() ? ` (${result.stderr.trim()})` : ""}; falling back.`,
+      );
       rmSync(tempDir, { recursive: true, force: true });
       return undefined;
     }
@@ -685,7 +695,9 @@ async function tryExecTts(params: {
       voiceCompatible: outputPath.endsWith(".ogg") || outputPath.endsWith(".oga"),
     };
   } catch (err) {
-    logVerbose(`TTS: exec error: ${err instanceof Error ? err.message : String(err)}; falling back.`);
+    logVerbose(
+      `TTS: exec error: ${err instanceof Error ? err.message : String(err)}; falling back.`,
+    );
     rmSync(tempDir, { recursive: true, force: true });
     return undefined;
   }

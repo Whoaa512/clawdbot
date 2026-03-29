@@ -52,7 +52,7 @@ function getCostBreakdown(totals: UsageTotals) {
   };
 }
 
-const getSessionKindBadgeLabel = (session: UsageSessionEntry): string | undefined => {
+export const getSessionKindBadgeLabel = (session: UsageSessionEntry): string | undefined => {
   if (!session.kind || session.kind === "main") {
     return undefined;
   }
@@ -69,13 +69,12 @@ const getSessionKindBadgeLabel = (session: UsageSessionEntry): string | undefine
   return "[other]";
 };
 
-const buildByKindInsightRows = (aggregates: UsageAggregates) =>
+export const buildByKindInsightRows = (aggregates: UsageAggregates) =>
   (aggregates.byKind ?? []).slice(0, 5).map((entry) => ({
     label: entry.kind,
     value: formatCost(entry.totals?.totalCost ?? 0),
     sub: formatTokens(entry.totals?.totalTokens ?? 0),
   }));
-
 
 function renderFilterChips(
   selectedDays: string[],

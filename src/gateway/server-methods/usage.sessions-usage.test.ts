@@ -454,7 +454,7 @@ describe("sessions.usage", () => {
           ...BASE_USAGE_RANGE,
           key: "agent:opus:run-dup",
         });
-        const sessions = expectSuccessfulSessionsUsage(respond);
+        const { sessions } = expectSuccessfulSessionsUsage(respond);
         expect(sessions).toHaveLength(1);
         expect(sessions[0]?.key).toBe(preferredKey);
       });
