@@ -429,6 +429,24 @@ function mergeCommandEnvironments(
   };
 }
 
+const PREBUILT_ARTIFACTS = [
+  "src/canvas-host/a2ui/a2ui.bundle.js",
+  "src/canvas-host/a2ui/.bundle.hash",
+];
+
+async function copyPrebuiltArtifacts(srcRoot: string, destRoot: string): Promise<void> {
+  for (const rel of PREBUILT_ARTIFACTS) {
+    const src = path.join(srcRoot, rel);
+    const dest = path.join(destRoot, rel);
+    try {
+      await fs.access(src);
+      await fs.mkdir(path.dirname(dest), { recursive: true });
+      await fs.copyFile(src, dest);
+    } catch {
+    }
+  }
+}
+
 export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<UpdateRunResult> {
   const startedAt = Date.now();
   const defaultCommandEnv = await createGlobalInstallEnv();
@@ -691,6 +709,8 @@ export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<
           if (depsStep.exitCode !== 0) {
             continue;
           }
+
+          await copyPrebuiltArtifacts(gitRoot, worktreeDir);
 
           const buildStep = await runStep(
             step(
