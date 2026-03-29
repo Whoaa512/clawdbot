@@ -23,6 +23,7 @@ import {
 } from "./sessions-helpers.js";
 import { buildAgentToAgentMessageContext, resolvePingPongTurns } from "./sessions-send-helpers.js";
 import { runSessionsSendA2AFlow } from "./sessions-send-tool.a2a.js";
+import { runSessionsSendAsyncFlow } from "./sessions-send-tool.async.js";
 
 const SessionsSendToolSchema = Type.Object({
   sessionKey: Type.Optional(Type.String()),
@@ -30,6 +31,7 @@ const SessionsSendToolSchema = Type.Object({
   agentId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   message: Type.String(),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 0 })),
+  async: Type.Optional(Type.Boolean()),
 });
 
 type GatewayCaller = typeof callGateway;
@@ -302,6 +304,47 @@ export function createSessionsSendTool(opts?: {
           waitRunId,
         });
       };
+
+      const asyncMode = params.async === true;
+
+      if (asyncMode) {
+        try {
+          const response = await callGateway<{ runId: string }>({
+            method: "agent",
+            params: sendParams,
+            timeoutMs: 10_000,
+          });
+          if (typeof response?.runId === "string" && response.runId) {
+            runId = response.runId;
+          }
+          const correlationId = crypto.randomUUID();
+          void runSessionsSendAsyncFlow({
+            targetSessionKey: resolvedKey,
+            displayKey,
+            message,
+            waitRunId: runId,
+            timeoutMs: announceTimeoutMs,
+            requesterSessionKey,
+            requesterChannel,
+            correlationId,
+          });
+          return jsonResult({
+            runId,
+            status: "accepted",
+            correlationId,
+            sessionKey: displayKey,
+          });
+        } catch (err) {
+          const messageText =
+            err instanceof Error ? err.message : typeof err === "string" ? err : "error";
+          return jsonResult({
+            runId,
+            status: "error",
+            error: messageText,
+            sessionKey: displayKey,
+          });
+        }
+      }
 
       if (timeoutSeconds === 0) {
         const start = await startAgentRun({
