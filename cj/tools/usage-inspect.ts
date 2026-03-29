@@ -30,7 +30,12 @@ function daysToDateRange(days: number): { startDate: string; endDate: string } {
 
 const fmt = {
   usd: (n: number) => `$${n.toFixed(4)}`,
-  tokens: (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n)),
+  tokens: (n: number) =>
+    n >= 1_000_000
+      ? `${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1_000
+        ? `${(n / 1_000).toFixed(1)}K`
+        : String(n),
   pct: (n: number) => `${n.toFixed(1)}%`,
   dur: (ms: number) => {
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -59,7 +64,7 @@ function parseArgs() {
 }
 
 async function summary(days: number) {
-  const result = await rpc("usage.cost", { days }) as any;
+  const result = (await rpc("usage.cost", { days })) as any;
   const { totals, daily } = result;
 
   console.log(`\n📊 Usage Summary (last ${days} days)\n`);
@@ -68,14 +73,20 @@ async function summary(days: number) {
   console.log(`  Input:        ${fmt.tokens(totals.input)} (${fmt.usd(totals.inputCost)})`);
   console.log(`  Output:       ${fmt.tokens(totals.output)} (${fmt.usd(totals.outputCost)})`);
   console.log(`  Cache Read:   ${fmt.tokens(totals.cacheRead)} (${fmt.usd(totals.cacheReadCost)})`);
-  console.log(`  Cache Write:  ${fmt.tokens(totals.cacheWrite)} (${fmt.usd(totals.cacheWriteCost)})`);
+  console.log(
+    `  Cache Write:  ${fmt.tokens(totals.cacheWrite)} (${fmt.usd(totals.cacheWriteCost)})`,
+  );
 
   if (daily?.length) {
     console.log(`\n  Daily breakdown (recent):`);
     const recent = daily.slice(-7);
     for (const d of recent) {
-      const bar = "█".repeat(Math.min(40, Math.round(d.totalCost / (totals.totalCost / days) * 10)));
-      console.log(`    ${d.date}  ${fmt.usd(d.totalCost).padStart(10)}  ${fmt.tokens(d.totalTokens).padStart(8)}  ${bar}`);
+      const bar = "█".repeat(
+        Math.min(40, Math.round((d.totalCost / (totals.totalCost / days)) * 10)),
+      );
+      console.log(
+        `    ${d.date}  ${fmt.usd(d.totalCost).padStart(10)}  ${fmt.tokens(d.totalTokens).padStart(8)}  ${bar}`,
+      );
     }
   }
 }
@@ -88,10 +99,10 @@ async function sessions(opts: {
   model?: string;
   kind?: string;
 }) {
-  const result = await rpc("sessions.usage", {
+  const result = (await rpc("sessions.usage", {
     ...daysToDateRange(opts.days),
     limit: Math.min(opts.limit * 3, 200), // over-fetch for filtering
-  }) as any;
+  })) as any;
 
   let entries: any[] = result.sessions ?? [];
 
@@ -104,10 +115,11 @@ async function sessions(opts: {
   if (opts.model) {
     const pat = opts.model.toLowerCase();
     entries = entries.filter((s: any) =>
-      s.usage?.modelUsage?.some((m: any) =>
-        (m.model ?? "").toLowerCase().includes(pat) ||
-        (m.provider ?? "").toLowerCase().includes(pat)
-      )
+      s.usage?.modelUsage?.some(
+        (m: any) =>
+          (m.model ?? "").toLowerCase().includes(pat) ||
+          (m.provider ?? "").toLowerCase().includes(pat),
+      ),
     );
   }
 
@@ -126,7 +138,9 @@ async function sessions(opts: {
   if (aggregates?.byAgent?.length) {
     console.log("  By Agent:");
     for (const a of aggregates.byAgent) {
-      console.log(`    ${a.agentId.padEnd(20)} ${fmt.usd(a.totals.totalCost).padStart(10)}  ${fmt.tokens(a.totals.totalTokens).padStart(8)}`);
+      console.log(
+        `    ${a.agentId.padEnd(20)} ${fmt.usd(a.totals.totalCost).padStart(10)}  ${fmt.tokens(a.totals.totalTokens).padStart(8)}`,
+      );
     }
     console.log();
   }
@@ -134,7 +148,9 @@ async function sessions(opts: {
   if (aggregates?.byModel?.length) {
     console.log("  By Model:");
     for (const m of aggregates.byModel.slice(0, 5)) {
-      console.log(`    ${(m.provider + "/" + m.model).padEnd(40)} ${fmt.usd(m.totals.totalCost).padStart(10)}  ${fmt.tokens(m.totals.totalTokens).padStart(8)}`);
+      console.log(
+        `    ${(m.provider + "/" + m.model).padEnd(40)} ${fmt.usd(m.totals.totalCost).padStart(10)}  ${fmt.tokens(m.totals.totalTokens).padStart(8)}`,
+      );
     }
     console.log();
   }
@@ -142,7 +158,9 @@ async function sessions(opts: {
   if (aggregates?.byKind?.length) {
     console.log("  By Kind:");
     for (const k of aggregates.byKind) {
-      console.log(`    ${k.kind.padEnd(15)} ${fmt.usd(k.totals.totalCost).padStart(10)}  ${fmt.tokens(k.totals.totalTokens).padStart(8)}`);
+      console.log(
+        `    ${k.kind.padEnd(15)} ${fmt.usd(k.totals.totalCost).padStart(10)}  ${fmt.tokens(k.totals.totalTokens).padStart(8)}`,
+      );
     }
     console.log();
   }
@@ -155,7 +173,7 @@ async function sessions(opts: {
     const model = u.modelUsage?.[0]?.model ?? s.model ?? "";
     const date = new Date(s.updatedAt).toISOString().slice(0, 16);
     console.log(
-      `    ${date}  ${s.kind.padEnd(10)} ${fmt.usd(u.totalCost).padStart(10)}  ${fmt.tokens(u.totalTokens).padStart(8)}  ${model.slice(0, 25).padEnd(25)}  ${(s.agentId ?? "").slice(0, 15)}${label}`
+      `    ${date}  ${s.kind.padEnd(10)} ${fmt.usd(u.totalCost).padStart(10)}  ${fmt.tokens(u.totalTokens).padStart(8)}  ${model.slice(0, 25).padEnd(25)}  ${(s.agentId ?? "").slice(0, 15)}${label}`,
     );
   }
 
@@ -163,7 +181,7 @@ async function sessions(opts: {
 }
 
 async function sessionDetail(key: string) {
-  const result = await rpc("sessions.usage", { key, limit: 1 }) as any;
+  const result = (await rpc("sessions.usage", { key, limit: 1 })) as any;
   const session = result.sessions?.[0];
   if (!session) {
     console.error(`Session not found: ${key}`);
@@ -191,41 +209,56 @@ async function sessionDetail(key: string) {
 
     if (u.messageCounts) {
       const mc = u.messageCounts;
-      console.log(`\n  Messages: ${mc.total} (user: ${mc.user}, assistant: ${mc.assistant}, tools: ${mc.toolCalls}, errors: ${mc.errors})`);
+      console.log(
+        `\n  Messages: ${mc.total} (user: ${mc.user}, assistant: ${mc.assistant}, tools: ${mc.toolCalls}, errors: ${mc.errors})`,
+      );
     }
 
     if (u.modelUsage?.length) {
       console.log("\n  Models:");
       for (const m of u.modelUsage) {
-        console.log(`    ${(m.provider + "/" + m.model).padEnd(40)} ${fmt.usd(m.totals.totalCost).padStart(10)}  calls: ${m.count}`);
+        console.log(
+          `    ${(m.provider + "/" + m.model).padEnd(40)} ${fmt.usd(m.totals.totalCost).padStart(10)}  calls: ${m.count}`,
+        );
       }
     }
 
     if (u.toolUsage?.tools?.length) {
-      console.log(`\n  Tools (${u.toolUsage.uniqueTools} unique, ${u.toolUsage.totalCalls} calls):`);
+      console.log(
+        `\n  Tools (${u.toolUsage.uniqueTools} unique, ${u.toolUsage.totalCalls} calls):`,
+      );
       for (const t of u.toolUsage.tools.slice(0, 10)) {
         console.log(`    ${t.name.padEnd(30)} ${String(t.count).padStart(5)}`);
       }
     }
 
     if (u.latency) {
-      console.log(`\n  Latency:  avg ${fmt.dur(u.latency.avgMs)}, p95 ${fmt.dur(u.latency.p95Ms)}, min ${fmt.dur(u.latency.minMs)}, max ${fmt.dur(u.latency.maxMs)}`);
+      console.log(
+        `\n  Latency:  avg ${fmt.dur(u.latency.avgMs)}, p95 ${fmt.dur(u.latency.p95Ms)}, min ${fmt.dur(u.latency.minMs)}, max ${fmt.dur(u.latency.maxMs)}`,
+      );
     }
   }
 }
 
 async function search(query: string, days: number, limit: number) {
-  const result = await rpc("sessions.usage", { ...daysToDateRange(days), limit: 200 }) as any;
+  const result = (await rpc("sessions.usage", { ...daysToDateRange(days), limit: 200 })) as any;
   const q = query.toLowerCase();
 
-  const matches = (result.sessions ?? []).filter((s: any) => {
-    const fields = [
-      s.key, s.label, s.sessionId, s.agentId, s.channel,
-      s.model, s.kind,
-      ...(s.usage?.modelUsage ?? []).map((m: any) => `${m.provider}/${m.model}`),
-    ].filter(Boolean);
-    return fields.some((f: string) => f.toLowerCase().includes(q));
-  }).slice(0, limit);
+  const matches = (result.sessions ?? [])
+    .filter((s: any) => {
+      const fields = [
+        s.key,
+        s.label,
+        s.sessionId,
+        s.agentId,
+        s.channel,
+        s.model,
+        s.kind,
+        ...(s.usage?.modelUsage ?? []).map((m: any) => `${m.provider}/${m.model}`),
+      ].filter(Boolean);
+      return fields.some((f: string) => f.toLowerCase().includes(q));
+    })
+    .slice(0, limit);
 
   console.log(`\n🔎 Search: "${query}" (${matches.length} matches)\n`);
 
@@ -235,7 +268,9 @@ async function search(query: string, days: number, limit: number) {
     const tokens = u ? fmt.tokens(u.totalTokens) : "n/a";
     const date = new Date(s.updatedAt).toISOString().slice(0, 16);
     const label = s.label ? ` (${s.label})` : "";
-    console.log(`  ${date}  ${cost.padStart(10)}  ${tokens.padStart(8)}  ${s.kind.padEnd(10)}  ${(s.agentId ?? "").slice(0, 15)}${label}`);
+    console.log(
+      `  ${date}  ${cost.padStart(10)}  ${tokens.padStart(8)}  ${s.kind.padEnd(10)}  ${(s.agentId ?? "").slice(0, 15)}${label}`,
+    );
     console.log(`    key: ${s.key}`);
   }
 }
