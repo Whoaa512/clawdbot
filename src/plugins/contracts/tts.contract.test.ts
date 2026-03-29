@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
@@ -149,6 +152,29 @@ async function withMockedSpeechFetch(
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   try {
     await run(fetchMock);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function makeTempScript(source: string): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "openclaw-tts-test-"));
+  const filePath = path.join(dir, "script.mjs");
+  writeFileSync(filePath, source);
+  return filePath;
+}
+
+async function withMockedOpenAITtsFetch<T>(
+  run: (fetchMock: ReturnType<typeof vi.fn>) => Promise<T>,
+) {
+  const originalFetch = globalThis.fetch;
+  const fetchMock = vi.fn(async () => ({
+    ok: true,
+    arrayBuffer: async () => new TextEncoder().encode("openai-audio").buffer,
+  }));
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  try {
+    return await run(fetchMock);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -799,6 +825,7 @@ describe("tts", () => {
       cfg: OpenClawConfig;
       payload: { text: string };
       inboundAudio?: boolean;
+      inboundTtsRequest?: boolean;
       expectedFetchCalls: number;
       expectSamePayload: boolean;
     }) {
@@ -808,6 +835,9 @@ describe("tts", () => {
           cfg: params.cfg,
           kind: "final",
           ...(params.inboundAudio !== undefined ? { inboundAudio: params.inboundAudio } : {}),
+          ...(params.inboundTtsRequest !== undefined
+            ? { inboundTtsRequest: params.inboundTtsRequest }
+            : {}),
         });
         expect(fetchMock).toHaveBeenCalledTimes(params.expectedFetchCalls);
         if (params.expectSamePayload) {
@@ -872,6 +902,159 @@ describe("tts", () => {
         payload: testCase.payload,
         expectedFetchCalls: testCase.expectedFetchCalls,
         expectSamePayload: testCase.expectSamePayload,
+      });
+    });
+
+    it("runs auto-TTS in tagged mode when inboundTtsRequest is true", async () => {
+      await expectAutoTtsOutcome({
+        cfg: taggedCfg,
+        payload: { text: "Hello world" },
+        inboundTtsRequest: true,
+        expectedFetchCalls: 1,
+        expectSamePayload: false,
+      });
+    });
+
+    it("skips auto-TTS in tagged mode without directive or inboundTtsRequest", async () => {
+      await expectAutoTtsOutcome({
+        cfg: taggedCfg,
+        payload: { text: "Hello world" },
+        inboundTtsRequest: false,
+        expectedFetchCalls: 0,
+        expectSamePayload: true,
+      });
+    });
+  });
+
+  describe("textToSpeech – exec pre-hook", () => {
+    const baseCfg: OpenClawConfig = {
+      agents: { defaults: { model: { primary: "openai/gpt-4o-mini" } } },
+      messages: {
+        tts: {
+          auto: "always",
+          provider: "openai",
+          openai: { apiKey: "test-key", model: "gpt-4o-mini-tts", voice: "alloy" },
+        },
+      },
+    };
+
+    it("uses exec output before built-in providers", async () => {
+      const scriptPath = makeTempScript(`
+import { writeFileSync } from "node:fs";
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  writeFileSync(process.argv[2], Buffer.concat(chunks));
+});
+`);
+
+      await withMockedOpenAITtsFetch(async (fetchMock) => {
+        const result = await tts.textToSpeech({
+          text: "hello from stdin",
+          cfg: {
+            ...baseCfg,
+            messages: {
+              tts: {
+                ...baseCfg.messages!.tts,
+                exec: {
+                  command: process.execPath,
+                  args: [scriptPath, "{output}"],
+                },
+              },
+            },
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.provider).toBe("exec");
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(result.audioPath).toBeDefined();
+        expect(readFileSync(result.audioPath!, "utf8")).toBe("hello from stdin");
+        rmSync(path.dirname(scriptPath), { recursive: true, force: true });
+      });
+    });
+
+    it("falls back to built-in provider when exec fails", async () => {
+      const scriptPath = makeTempScript("process.exit(1);\n");
+
+      await withMockedOpenAITtsFetch(async (fetchMock) => {
+        const result = await tts.textToSpeech({
+          text: "hello fallback",
+          cfg: {
+            ...baseCfg,
+            messages: {
+              tts: {
+                ...baseCfg.messages!.tts,
+                exec: {
+                  command: process.execPath,
+                  args: [scriptPath, "{output}"],
+                },
+              },
+            },
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.provider).toBe("openai");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        rmSync(path.dirname(scriptPath), { recursive: true, force: true });
+      });
+    });
+
+    it("replaces {output} in exec args", async () => {
+      const scriptPath = makeTempScript(`
+import { writeFileSync } from "node:fs";
+writeFileSync(process.argv[2], "substituted");
+`);
+
+      const result = await tts.textToSpeech({
+        text: "hello substitution",
+        cfg: {
+          ...baseCfg,
+          messages: {
+            tts: {
+              ...baseCfg.messages!.tts,
+              exec: {
+                command: process.execPath,
+                args: [scriptPath, "{output}"],
+              },
+            },
+          },
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe("exec");
+      expect(result.audioPath).toBeDefined();
+      expect(readFileSync(result.audioPath!, "utf8")).toBe("substituted");
+      rmSync(path.dirname(scriptPath), { recursive: true, force: true });
+    });
+
+    it("falls back when exec times out", async () => {
+      const scriptPath = makeTempScript("setTimeout(() => {}, 1_000);\n");
+
+      await withMockedOpenAITtsFetch(async (fetchMock) => {
+        const result = await tts.textToSpeech({
+          text: "hello timeout",
+          cfg: {
+            ...baseCfg,
+            messages: {
+              tts: {
+                ...baseCfg.messages!.tts,
+                exec: {
+                  command: process.execPath,
+                  args: [scriptPath, "{output}"],
+                  timeoutMs: 25,
+                },
+              },
+            },
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.provider).toBe("openai");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        rmSync(path.dirname(scriptPath), { recursive: true, force: true });
       });
     });
   });
