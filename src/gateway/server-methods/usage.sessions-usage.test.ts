@@ -23,6 +23,19 @@ vi.mock("../session-utils.js", async () => {
   };
 });
 
+vi.mock("../../cron/run-log.js", () => {
+  return {
+    readCronRunLogEntriesPageAll: vi.fn(async () => ({
+      entries: [],
+      total: 0,
+      offset: 0,
+      limit: 200,
+      hasMore: false,
+      nextOffset: null,
+    })),
+  };
+});
+
 vi.mock("../../infra/session-cost-usage.js", async () => {
   const actual = await vi.importActual<typeof import("../../infra/session-cost-usage.js")>(
     "../../infra/session-cost-usage.js",
@@ -73,6 +86,7 @@ vi.mock("../../infra/session-cost-usage.js", async () => {
   };
 });
 
+import { readCronRunLogEntriesPageAll } from "../../cron/run-log.js";
 import {
   discoverAllSessions,
   loadSessionCostSummary,
@@ -258,6 +272,80 @@ describe("sessions.usage", () => {
       "other",
       "main",
     ]);
+  });
+
+  it("enriches cron session metadata from run logs without changing totals", async () => {
+    vi.mocked(discoverAllSessions).mockImplementation(async (params?: { agentId?: string }) => {
+      if (params?.agentId !== "main") {
+        return [];
+      }
+      return [
+        {
+          sessionId: "s-cron-run",
+          sessionFile: "/tmp/agents/main/sessions/s-cron-run.jsonl",
+          mtime: 100,
+          firstUserMessage: "cron run",
+        },
+      ];
+    });
+
+    vi.mocked(loadCombinedSessionStoreForGateway).mockReturnValue({
+      storePath: "(multiple)",
+      store: {
+        "agent:main:cron:job-abc:run:run-xyz": {
+          sessionId: "s-cron-run",
+          sessionFile: "s-cron-run.jsonl",
+        },
+      },
+    });
+
+    vi.mocked(readCronRunLogEntriesPageAll).mockResolvedValueOnce({
+      entries: [
+        {
+          ts: 123456,
+          action: "finished",
+          jobId: "job-log",
+          sessionId: "s-cron-run",
+        },
+      ],
+      total: 1,
+      offset: 0,
+      limit: 200,
+      hasMore: false,
+      nextOffset: null,
+    });
+
+    vi.mocked(loadSessionCostSummary).mockResolvedValueOnce({
+      input: 10,
+      output: 20,
+      cacheRead: 5,
+      cacheWrite: 1,
+      totalTokens: 36,
+      totalCost: 0.12,
+      inputCost: 0.03,
+      outputCost: 0.08,
+      cacheReadCost: 0.01,
+      cacheWriteCost: 0,
+      missingCostEntries: 0,
+    });
+
+    const respond = await runSessionsUsage(BASE_USAGE_RANGE);
+    expect(respond.mock.calls[0]?.[0]).toBe(true);
+    const result = respond.mock.calls[0]?.[1] as {
+      totals: { totalTokens: number; totalCost: number };
+      sessions: Array<{
+        cron?: { jobId?: string; runId?: string; matchedRunLog?: boolean; runTs?: number };
+      }>;
+    };
+
+    expect(result.totals.totalTokens).toBe(36);
+    expect(result.totals.totalCost).toBe(0.12);
+    expect(result.sessions[0]?.cron).toEqual({
+      jobId: "job-abc",
+      runId: "run-xyz",
+      matchedRunLog: true,
+      runTs: 123456,
+    });
   });
 
   it("prefers spawnedBy parentSessionKey over key-derived thread parent", async () => {
