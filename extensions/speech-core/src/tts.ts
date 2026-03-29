@@ -54,6 +54,7 @@ export type ResolvedTtsConfig = {
   summaryModel?: string;
   modelOverrides: ResolvedTtsModelOverrides;
   providerConfigs: Record<string, SpeechProviderConfig>;
+  inboundTag?: string;
   prefsPath?: string;
   maxTextLength: number;
   timeoutMs: number;
@@ -297,6 +298,7 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
     summaryModel: raw.summaryModel?.trim() || undefined,
     modelOverrides: resolveModelOverridePolicy(raw.modelOverrides),
     providerConfigs: collectDirectProviderConfigEntries(raw),
+    inboundTag: raw.inboundTag?.trim() || undefined,
     prefsPath: raw.prefsPath,
     maxTextLength: raw.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH,
     timeoutMs,
