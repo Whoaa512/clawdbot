@@ -134,11 +134,17 @@ export function deriveGroupSessionPatch(params: {
     patch.space = space;
   }
 
+  const threadLabel = params.ctx.ThreadLabel?.trim();
+  if (threadLabel) {
+    patch.label = threadLabel;
+  }
+
   const displayName = buildGroupDisplayName({
     provider: channel,
     subject: nextSubject ?? params.existing?.subject,
     groupChannel: nextGroupChannel ?? params.existing?.groupChannel,
     space: space ?? params.existing?.space,
+    threadLabel: threadLabel ?? params.existing?.label,
     id: resolution.id,
     key: params.sessionKey,
   });

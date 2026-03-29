@@ -202,6 +202,7 @@ export async function getStatusSummary(
           agentId,
           key,
           kind: classifySessionKey(key, entry),
+          displayName: entry?.displayName,
           sessionId: entry?.sessionId,
           updatedAt,
           age,

@@ -33,6 +33,7 @@ import {
   buildSenderName,
   buildTelegramGroupFrom,
   describeReplyTarget,
+  getTopicName,
   normalizeForwardedContext,
   type TelegramThreadSpec,
 } from "./bot/helpers.js";
@@ -200,6 +201,8 @@ export async function buildTelegramInboundContextPayload(params: {
     ChatType: isGroup ? "group" : "direct",
     ConversationLabel: conversationLabel,
     GroupSubject: isGroup ? (msg.chat.title ?? undefined) : undefined,
+    ThreadLabel:
+      isGroup && resolvedThreadId != null ? getTopicName(chatId, resolvedThreadId) : undefined,
     GroupSystemPrompt: isGroup || (!isGroup && groupConfig) ? groupSystemPrompt : undefined,
     SenderName: senderName,
     SenderId: senderId || undefined,

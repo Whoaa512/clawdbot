@@ -22,6 +22,7 @@ import {
   buildTypingThreadParams,
   cacheTopicName,
   extractTelegramForumFlag,
+  getTopicName,
   resolveTelegramDirectPeerId,
   resolveTelegramForumFlag,
   resolveTelegramThreadSpec,

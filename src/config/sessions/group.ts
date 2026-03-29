@@ -25,6 +25,7 @@ export function buildGroupDisplayName(params: {
   subject?: string;
   groupChannel?: string;
   space?: string;
+  threadLabel?: string;
   id?: string;
   key: string;
 }) {
@@ -32,6 +33,7 @@ export function buildGroupDisplayName(params: {
   const groupChannel = params.groupChannel?.trim();
   const space = params.space?.trim();
   const subject = params.subject?.trim();
+  const threadLabel = params.threadLabel?.trim();
   const detail =
     (groupChannel && space
       ? `${space}${groupChannel.startsWith("#") ? "" : "#"}${groupChannel}`
@@ -48,7 +50,14 @@ export function buildGroupDisplayName(params: {
   if (token && !/^[@#]/.test(token) && !token.startsWith("g-") && !token.includes("#")) {
     token = `g-${token}`;
   }
-  return token ? `${providerKey}:${token}` : providerKey;
+  const base = token ? `${providerKey}:${token}` : providerKey;
+  if (threadLabel) {
+    const normalizedThread = normalizeGroupLabel(threadLabel);
+    if (normalizedThread) {
+      return `${base}#${normalizedThread}`;
+    }
+  }
+  return base;
 }
 
 export function resolveGroupSessionKey(ctx: MsgContext): GroupKeyResolution | null {
