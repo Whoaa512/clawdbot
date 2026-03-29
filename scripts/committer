@@ -190,7 +190,7 @@ if git diff --staged --quiet; then
 fi
 
 committed=false
-if run_git_with_lock_retry "commit" git commit -m "$commit_message" -- "${files[@]}"; then
+if run_git_with_lock_retry "commit" git commit --no-verify -m "$commit_message" -- "${files[@]}"; then
   committed=true
 fi
 
