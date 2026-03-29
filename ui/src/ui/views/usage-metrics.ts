@@ -369,6 +369,7 @@ const buildAggregatesFromSessions = (
         byProvider: [],
         byAgent: [],
         byChannel: [],
+        byKind: [],
         daily: [],
       }
     );
@@ -386,6 +387,7 @@ const buildAggregatesFromSessions = (
   >();
   const agentMap = new Map<string, UsageTotals>();
   const channelMap = new Map<string, UsageTotals>();
+  const kindMap = new Map<UsageSessionEntry["kind"], UsageTotals>();
   const dailyMap = new Map<
     string,
     {
@@ -466,6 +468,10 @@ const buildAggregatesFromSessions = (
       channelMap.set(session.channel, totals);
     }
 
+    const kindTotals = kindMap.get(session.kind) ?? emptyUsageTotals();
+    mergeUsageTotals(kindTotals, usage);
+    kindMap.set(session.kind, kindTotals);
+
     for (const day of usage.dailyBreakdown ?? []) {
       const daily = dailyMap.get(day.date) ?? {
         date: day.date,
@@ -536,6 +542,9 @@ const buildAggregatesFromSessions = (
     ),
     byAgent: Array.from(agentMap.entries())
       .map(([agentId, totals]) => ({ agentId, totals }))
+      .toSorted((a, b) => b.totals.totalCost - a.totals.totalCost),
+    byKind: Array.from(kindMap.entries())
+      .map(([kind, totals]) => ({ kind, totals }))
       .toSorted((a, b) => b.totals.totalCost - a.totals.totalCost),
     ...tail,
   };
