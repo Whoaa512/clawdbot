@@ -442,7 +442,12 @@ async function copyPrebuiltArtifacts(srcRoot: string, destRoot: string): Promise
       await fs.access(src);
       await fs.mkdir(path.dirname(dest), { recursive: true });
       await fs.copyFile(src, dest);
-    } catch {
+      const stat = await fs.stat(dest);
+      process.stderr.write(`[preflight] copied ${rel} (${stat.size} bytes) to ${dest}\n`);
+    } catch (err) {
+      process.stderr.write(
+        `[preflight] failed to copy ${rel}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
   }
 }
