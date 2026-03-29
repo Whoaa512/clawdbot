@@ -129,9 +129,7 @@ const BASE_USAGE_RANGE = {
   limit: 10,
 } as const;
 
-function expectSuccessfulSessionsUsage(
-  respond: ReturnType<typeof vi.fn>,
-): {
+function expectSuccessfulSessionsUsage(respond: ReturnType<typeof vi.fn>): {
   sessions: Array<{
     key: string;
     agentId?: string;
@@ -234,18 +232,22 @@ describe("sessions.usage", () => {
           sessionId: "s-cron-run",
           sessionFile: "s-cron-run.jsonl",
           spawnedBy: "agent:main:explicit-parent",
+          updatedAt: 110,
         },
         "agent:main:cron:job-2": {
           sessionId: "s-cron",
           sessionFile: "s-cron.jsonl",
+          updatedAt: 100,
         },
         "subagent:agent:main:root:subagent:worker": {
           sessionId: "s-sub",
           sessionFile: "s-sub.jsonl",
+          updatedAt: 90,
         },
         "legacy-session-key": {
           sessionId: "s-other",
           sessionFile: "s-other.jsonl",
+          updatedAt: 80,
         },
       },
     });
@@ -295,6 +297,7 @@ describe("sessions.usage", () => {
         "agent:main:cron:job-abc:run:run-xyz": {
           sessionId: "s-cron-run",
           sessionFile: "s-cron-run.jsonl",
+          updatedAt: 100,
         },
       },
     });
@@ -370,6 +373,7 @@ describe("sessions.usage", () => {
           sessionId: "thread-session",
           sessionFile: "thread-session.jsonl",
           spawnedBy: "agent:main:spawned-parent",
+          updatedAt: 100,
         },
       },
     });
