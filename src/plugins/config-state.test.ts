@@ -225,6 +225,19 @@ describe("resolveEnableState", () => {
     });
   });
 
+  it("still blocks memory slot plugin when explicitly denied", () => {
+    const normalized = normalizePluginsConfig({
+      enabled: true,
+      deny: ["memory-core"],
+    });
+    expectNormalizedEnableState({
+      id: "memory-core",
+      origin: "bundled",
+      config: normalized,
+      expected: { enabled: false, reason: "blocked by denylist" },
+    });
+  });
+
   it.each([
     [
       normalizePluginsConfig({}),
