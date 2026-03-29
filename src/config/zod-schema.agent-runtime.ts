@@ -803,6 +803,22 @@ export const AgentEntrySchema = z
     params: z.record(z.string(), z.unknown()).optional(),
     tools: AgentToolsSchema,
     runtime: AgentRuntimeSchema,
+    qmd: z
+      .object({
+        paths: z
+          .array(
+            z
+              .object({
+                path: z.string(),
+                name: z.string().optional(),
+                pattern: z.string().optional(),
+              })
+              .strict(),
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
