@@ -1085,6 +1085,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     if (!registrationMode) {
       record.status = "disabled";
       record.error = enableState.reason;
+      if (record.kind === "memory" && memorySlot === pluginId) {
+        memorySlotMatched = true;
+      }
       registry.plugins.push(record);
       seenIds.set(pluginId, candidate.origin);
       continue;
@@ -1374,9 +1377,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     }
   }
 
-  // Scoped snapshot loads may intentionally omit the configured memory plugin, so only
-  // emit the missing-memory diagnostic for full registry loads.
-  if (!onlyPluginIdSet && typeof memorySlot === "string" && !memorySlotMatched) {
+  if (!onlyPluginIdSet && typeof memorySlot === "string" && !memorySlotMatched && normalized.enabled) {
     registry.diagnostics.push({
       level: "warn",
       message: `memory slot plugin not found or not marked as memory: ${memorySlot}`,

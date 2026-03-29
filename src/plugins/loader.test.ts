@@ -99,22 +99,23 @@ function writePlugin(params: {
   body: string;
   dir?: string;
   filename?: string;
+  kind?: string;
 }): TempPlugin {
   const dir = params.dir ?? makeTempDir();
   const filename = params.filename ?? `${params.id}.cjs`;
   mkdirSafe(dir);
   const file = path.join(dir, filename);
   fs.writeFileSync(file, params.body, "utf-8");
+  const manifest: Record<string, unknown> = {
+    id: params.id,
+    configSchema: EMPTY_PLUGIN_SCHEMA,
+  };
+  if (params.kind) {
+    manifest.kind = params.kind;
+  }
   fs.writeFileSync(
     path.join(dir, "openclaw.plugin.json"),
-    JSON.stringify(
-      {
-        id: params.id,
-        configSchema: EMPTY_PLUGIN_SCHEMA,
-      },
-      null,
-      2,
-    ),
+    JSON.stringify(manifest, null, 2),
     "utf-8",
   );
   return { dir, file, id: params.id };
@@ -3683,5 +3684,56 @@ describe("clearPluginLoaderCache", () => {
     expect(resolveMemoryFlushPlan({})).toBeNull();
     expect(getMemoryRuntime()).toBeUndefined();
     expect(getMemoryEmbeddingProvider("stale")).toBeUndefined();
+  });
+});
+
+describe("memory slot warning suppression", () => {
+  it("does not warn about memory slot when plugins are globally disabled", () => {
+    const bundledDir = makeTempDir();
+    writePlugin({
+      id: "memory-core",
+      kind: "memory",
+      body: `export default { id: "memory-core", kind: "memory", register() {} };`,
+      dir: bundledDir,
+      filename: "memory-core.js",
+    });
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledDir;
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: { plugins: { enabled: false } },
+    });
+
+    const memorySlotWarn = registry.diagnostics.find((d) =>
+      d.message.includes("memory slot plugin not found"),
+    );
+    expect(memorySlotWarn).toBeUndefined();
+  });
+
+  it("does not warn when memory-core is discovered but disabled by denylist", () => {
+    const bundledDir = makeTempDir();
+    writePlugin({
+      id: "memory-core",
+      kind: "memory",
+      body: `export default { id: "memory-core", kind: "memory", register() {} };`,
+      dir: bundledDir,
+      filename: "memory-core.js",
+    });
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledDir;
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          slots: { memory: "memory-core" },
+          deny: ["memory-core"],
+        },
+      },
+    });
+
+    const memorySlotWarn = registry.diagnostics.find((d) =>
+      d.message.includes("memory slot plugin not found"),
+    );
+    expect(memorySlotWarn).toBeUndefined();
   });
 });
