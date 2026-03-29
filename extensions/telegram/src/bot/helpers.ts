@@ -341,9 +341,21 @@ export function buildSenderLabel(msg: Message, senderId?: number | string) {
   return idPart ?? "id:unknown";
 }
 
+const topicNameCache = new Map<string, string>();
+
+export function cacheTopicName(chatId: number | string, threadId: number, name: string): void {
+  topicNameCache.set(`${chatId}:${threadId}`, name);
+}
+
+export function getTopicName(chatId: number | string, threadId: number): string | undefined {
+  return topicNameCache.get(`${chatId}:${threadId}`);
+}
+
 export function buildGroupLabel(msg: Message, chatId: number | string, messageThreadId?: number) {
   const title = msg.chat?.title;
-  const topicSuffix = messageThreadId != null ? ` topic:${messageThreadId}` : "";
+  const topicName = messageThreadId != null ? getTopicName(chatId, messageThreadId) : undefined;
+  const topicSuffix =
+    messageThreadId != null ? ` topic:${messageThreadId}${topicName ? ` (${topicName})` : ""}` : "";
   if (title) {
     return `${title} id:${chatId}${topicSuffix}`;
   }
