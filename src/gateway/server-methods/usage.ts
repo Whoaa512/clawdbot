@@ -23,12 +23,20 @@ import {
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { resolvePreferredSessionKeyForSessionIdMatches } from "../../sessions/session-id-resolution.js";
 import {
+  getSubagentDepth,
+  isCronRunSessionKey,
+  isCronSessionKey,
+  isSubagentSessionKey,
+  resolveThreadParentSessionKey,
+} from "../../sessions/session-key-utils.js";
+import {
   buildUsageAggregateTail,
   mergeUsageDailyLatency,
   mergeUsageLatency,
 } from "../../shared/usage-aggregates.js";
 import type {
   SessionUsageEntry,
+  SessionUsageKind,
   SessionsUsageAggregates,
   SessionsUsageResult,
 } from "../../shared/usage-types.js";
@@ -362,7 +370,7 @@ export const __test = {
   costUsageCache,
 };
 
-export type { SessionUsageEntry, SessionsUsageAggregates, SessionsUsageResult };
+export type { SessionUsageEntry, SessionUsageKind, SessionsUsageAggregates, SessionsUsageResult };
 
 export const usageHandlers: GatewayRequestHandlers = {
   "usage.status": async ({ respond }) => {
@@ -551,6 +559,7 @@ export const usageHandlers: GatewayRequestHandlers = {
     const byProviderMap = new Map<string, SessionModelUsage>();
     const byAgentMap = new Map<string, CostUsageSummary["totals"]>();
     const byChannelMap = new Map<string, CostUsageSummary["totals"]>();
+    const byKindMap = new Map<SessionUsageKind, CostUsageSummary["totals"]>();
     const dailyAggregateMap = new Map<
       string,
       {
@@ -607,6 +616,18 @@ export const usageHandlers: GatewayRequestHandlers = {
 
     for (const merged of limitedEntries) {
       const agentId = parseAgentSessionKey(merged.key)?.agentId;
+      const kind: SessionUsageKind = isCronRunSessionKey(merged.key)
+        ? "cron-run"
+        : isCronSessionKey(merged.key)
+          ? "cron"
+          : isSubagentSessionKey(merged.key)
+            ? "subagent"
+            : merged.key.startsWith("agent:")
+              ? "main"
+              : "other";
+      const subagentDepth = kind === "subagent" ? getSubagentDepth(merged.key) : undefined;
+      const parentSessionKey =
+        merged.storeEntry?.spawnedBy ?? resolveThreadParentSessionKey(merged.key) ?? undefined;
       const usage = await loadSessionCostSummary({
         sessionId: merged.sessionId,
         sessionEntry: merged.storeEntry,
@@ -715,6 +736,10 @@ export const usageHandlers: GatewayRequestHandlers = {
           byChannelMap.set(channel, channelTotals);
         }
 
+        const kindTotals = byKindMap.get(kind) ?? emptyTotals();
+        mergeTotals(kindTotals, usage);
+        byKindMap.set(kind, kindTotals);
+
         if (usage.dailyBreakdown) {
           for (const day of usage.dailyBreakdown) {
             const daily = dailyAggregateMap.get(day.date) ?? {
@@ -754,6 +779,9 @@ export const usageHandlers: GatewayRequestHandlers = {
         label: merged.label,
         sessionId: merged.sessionId,
         updatedAt: merged.updatedAt,
+        kind,
+        subagentDepth,
+        parentSessionKey,
         agentId,
         channel,
         chatType,
@@ -808,6 +836,9 @@ export const usageHandlers: GatewayRequestHandlers = {
       }),
       byAgent: Array.from(byAgentMap.entries())
         .map(([id, totals]) => ({ agentId: id, totals }))
+        .toSorted((a, b) => (b.totals?.totalCost ?? 0) - (a.totals?.totalCost ?? 0)),
+      byKind: Array.from(byKindMap.entries())
+        .map(([kind, totals]) => ({ kind, totals }))
         .toSorted((a, b) => (b.totals?.totalCost ?? 0) - (a.totals?.totalCost ?? 0)),
       ...tail,
     };

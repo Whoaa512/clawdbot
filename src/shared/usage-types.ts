@@ -10,11 +10,16 @@ import type {
   SessionToolUsage,
 } from "../infra/session-cost-usage.js";
 
+export type SessionUsageKind = "main" | "subagent" | "cron" | "cron-run" | "other";
+
 export type SessionUsageEntry = {
   key: string;
   label?: string;
   sessionId?: string;
   updatedAt?: number;
+  kind: SessionUsageKind;
+  subagentDepth?: number;
+  parentSessionKey?: string;
   agentId?: string;
   channel?: string;
   chatType?: string;
@@ -43,6 +48,7 @@ export type SessionsUsageAggregates = {
   byProvider: SessionModelUsage[];
   byAgent: Array<{ agentId: string; totals: CostUsageSummary["totals"] }>;
   byChannel: Array<{ channel: string; totals: CostUsageSummary["totals"] }>;
+  byKind: Array<{ kind: SessionUsageKind; totals: CostUsageSummary["totals"] }>;
   latency?: SessionLatencyStats;
   dailyLatency?: SessionDailyLatency[];
   modelDaily?: SessionDailyModelUsage[];
