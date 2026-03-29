@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   existsSync,
@@ -5,6 +6,8 @@ import {
   readFileSync,
   writeFileSync,
   mkdtempSync,
+  rmSync,
+  statSync,
   renameSync,
   unlinkSync,
 } from "node:fs";
@@ -53,6 +56,11 @@ export type ResolvedTtsConfig = {
   providerSource: "config" | "default";
   summaryModel?: string;
   modelOverrides: ResolvedTtsModelOverrides;
+  exec?: {
+    command: string;
+    args: string[];
+    timeoutMs: number;
+  };
   providerConfigs: Record<string, SpeechProviderConfig>;
   inboundTag?: string;
   prefsPath?: string;
@@ -288,6 +296,7 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
   const providerSource = raw.provider ? "config" : "default";
   const timeoutMs = raw.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const auto = resolveConfiguredTtsAutoMode(raw);
+  const execCommand = raw.exec?.command?.trim();
   return {
     auto,
     mode: raw.mode ?? "final",
@@ -296,6 +305,13 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
       (providerSource === "config" ? raw.provider?.trim().toLowerCase() || "" : ""),
     providerSource,
     summaryModel: raw.summaryModel?.trim() || undefined,
+    exec: execCommand
+      ? {
+          command: resolveUserPath(execCommand),
+          args: raw.exec?.args ?? [],
+          timeoutMs: raw.exec?.timeoutMs ?? timeoutMs,
+        }
+      : undefined,
     modelOverrides: resolveModelOverridePolicy(raw.modelOverrides),
     providerConfigs: collectDirectProviderConfigEntries(raw),
     inboundTag: raw.inboundTag?.trim() || undefined,
@@ -613,6 +629,68 @@ function resolveTtsRequestSetup(params: {
   };
 }
 
+async function tryExecTts(params: {
+  text: string;
+  config: ResolvedTtsConfig;
+  outputExtension: string;
+}): Promise<TtsResult | undefined> {
+  const startedAt = Date.now();
+  if (!params.config.exec) {
+    return undefined;
+  }
+
+  const tempRoot = resolvePreferredOpenClawTmpDir();
+  mkdirSync(tempRoot, { recursive: true, mode: 0o700 });
+  const tempDir = mkdtempSync(path.join(tempRoot, "tts-"));
+  const outputPath = path.join(tempDir, `voice-${Date.now()}${params.outputExtension}`);
+  const argv = [
+    params.config.exec.command,
+    ...params.config.exec.args.map((arg) => arg.replaceAll("{output}", outputPath)),
+  ];
+
+  try {
+    const result = await new Promise<{ code: number | null; stderr: string }>((resolve) => {
+      const proc = execFile(argv[0], argv.slice(1), {
+        timeout: params.config.exec!.timeoutMs,
+        maxBuffer: 10 * 1024 * 1024,
+      }, (error, _stdout, stderr) => {
+        resolve({ code: error ? (error as NodeJS.ErrnoException & { code?: number }).code ?? 1 : 0, stderr: stderr ?? "" });
+      });
+      if (proc.stdin) {
+        proc.stdin.write(params.text);
+        proc.stdin.end();
+      }
+    });
+
+    if (result.code !== 0) {
+      logVerbose(`TTS: exec failed (code ${result.code})${result.stderr.trim() ? ` (${result.stderr.trim()})` : ""}; falling back.`);
+      rmSync(tempDir, { recursive: true, force: true });
+      return undefined;
+    }
+
+    if (!existsSync(outputPath) || statSync(outputPath).size <= 0) {
+      logVerbose(`TTS: exec produced no/empty output file; falling back.`);
+      rmSync(tempDir, { recursive: true, force: true });
+      return undefined;
+    }
+
+    scheduleCleanup(tempDir);
+    const ext = path.extname(outputPath);
+    return {
+      success: true,
+      audioPath: outputPath,
+      provider: "exec",
+      latencyMs: Date.now() - startedAt,
+      outputFormat: ext ? ext.slice(1) : undefined,
+      voiceCompatible: outputPath.endsWith(".ogg") || outputPath.endsWith(".oga"),
+    };
+  } catch (err) {
+    logVerbose(`TTS: exec error: ${err instanceof Error ? err.message : String(err)}; falling back.`);
+    rmSync(tempDir, { recursive: true, force: true });
+    return undefined;
+  }
+}
+
 export async function textToSpeech(params: {
   text: string;
   cfg: OpenClawConfig;
@@ -621,6 +699,14 @@ export async function textToSpeech(params: {
   overrides?: TtsDirectiveOverrides;
   disableFallback?: boolean;
 }): Promise<TtsResult> {
+  const config = resolveTtsConfig(params.cfg);
+  if (config.exec) {
+    const execResult = await tryExecTts({ text: params.text, config, outputExtension: ".ogg" });
+    if (execResult) {
+      return execResult;
+    }
+  }
+
   const synthesis = await synthesizeSpeech(params);
   if (!synthesis.success || !synthesis.audioBuffer || !synthesis.fileExtension) {
     return buildTtsFailureResult([synthesis.error ?? "TTS conversion failed"]);

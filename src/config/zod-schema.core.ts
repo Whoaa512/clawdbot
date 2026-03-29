@@ -400,6 +400,17 @@ export const TtsConfigSchema = z
     mode: TtsModeSchema.optional(),
     provider: TtsProviderSchema.optional(),
     summaryModel: z.string().optional(),
+    exec: z
+      .object({
+        command: z
+          .string()
+          .refine((value) => isSafeExecutableValue(value), "messages.tts.exec.command is unsafe.")
+          .optional(),
+        args: z.array(z.string()).optional(),
+        timeoutMs: z.number().int().min(1000).max(120000).optional(),
+      })
+      .strict()
+      .optional(),
     modelOverrides: z
       .object({
         enabled: z.boolean().optional(),
